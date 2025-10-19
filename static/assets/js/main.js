@@ -156,10 +156,22 @@
 					fetch('/generate', { method: 'POST' })
 					.then(function(res) {
 						if (!res.ok) return res.json().then(function(j){ throw new Error(j.message || 'Generate failed'); });
-						return res.blob();
-					}).then(function(blob) {
+						// Extract timing information from headers
+						var genTime = res.headers.get('X-Generation-Time');
+						var totalAssignments = res.headers.get('X-Total-Assignments');
+						var timingInfo = '';
+						if (genTime) {
+							timingInfo = 'Generated in ' + genTime + 's';
+							if (totalAssignments) {
+								timingInfo += ' (' + totalAssignments + ' assignments)';
+							}
+						}
+						return res.blob().then(function(blob) {
+							return { blob: blob, timing: timingInfo };
+						});
+					}).then(function(data) {
 						// Trigger download
-						var url = window.URL.createObjectURL(blob);
+						var url = window.URL.createObjectURL(data.blob);
 						var a = document.createElement('a');
 						a.href = url;
 						a.download = 'timetable.xlsx';
@@ -167,7 +179,9 @@
 						a.click();
 						a.remove();
 						window.URL.revokeObjectURL(url);
-						message._show('success', 'Downloaded');
+						// Show timing information
+						var msg = data.timing ? data.timing : 'Downloaded';
+						message._show('success', msg);
 					}).catch(function(err) {
 						console.error('[generate] error', err);
 						message._show('failure', err.message || 'Failed');

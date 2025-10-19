@@ -185,7 +185,7 @@ def build_domains(courses_df, instructors_df, rooms_df, timeslots_df, sections_d
             var = f"{course_id}::{section_id}::{lecture_name}"
             variables.append(var)
 
-            def generate_vals(allow_unqualified=False, allow_room_mismatch=False):
+            def generate_vals(allow_unqualified=False, allow_room_mismatch=False, allow_role_mismatch=False):
                 vals_local = []
                 for t in timeslots:
                     for room in rooms:
@@ -208,6 +208,21 @@ def build_domains(courses_df, instructors_df, rooms_df, timeslots_df, sections_d
                                 if 'Not on' in pref_slots and day in pref_slots:
                                     instr_unavailable = True
                             
+                            # Check role-based assignment: Professors -> Lectures, Assistant Professors -> Labs
+                            instr_role = str(instr.get('Role', '')).lower()
+                            is_lab_session = 'lab' in lecture_name.lower() if isinstance(lecture_name, str) else False
+                            role_mismatch = False
+                            
+                            if instr_role and not allow_role_mismatch:
+                                # Assistant Professor should only teach labs
+                                if 'assistant' in instr_role and not is_lab_session:
+                                    role_mismatch = True
+                                    rejection_reasons[var]['role_mismatch_assistant_to_lecture'] += 1
+                                # Professor should only teach lectures (not labs)
+                                elif 'professor' in instr_role and 'assistant' not in instr_role and is_lab_session:
+                                    role_mismatch = True
+                                    rejection_reasons[var]['role_mismatch_professor_to_lab'] += 1
+                            
                             if instr_unqualified and not allow_unqualified:
                                 rejection_reasons[var]['unqualified_instructor'] += 1
                                 continue
@@ -217,27 +232,33 @@ def build_domains(courses_df, instructors_df, rooms_df, timeslots_df, sections_d
                             if room_mismatch and not allow_room_mismatch:
                                 rejection_reasons[var]['room_type_mismatch'] += 1
                                 continue
+                            if role_mismatch:
+                                continue
                             vals_local.append({'timeslot': t, 'room': room['RoomID'], 'instructor': instr['InstructorID'] if 'InstructorID' in instr else instr.get('Name')})
                 return vals_local
 
             if force_permissive:
-                vals = generate_vals(allow_unqualified=True, allow_room_mismatch=True)
+                vals = generate_vals(allow_unqualified=True, allow_room_mismatch=True, allow_role_mismatch=True)
                 if vals:
                     fallbacks_used[var].append('force_permissive_initial')
             else:
-                vals = generate_vals(allow_unqualified=False, allow_room_mismatch=False)
+                vals = generate_vals(allow_unqualified=False, allow_room_mismatch=False, allow_role_mismatch=False)
             if not vals:
-                vals = generate_vals(allow_unqualified=True, allow_room_mismatch=False)
+                vals = generate_vals(allow_unqualified=True, allow_room_mismatch=False, allow_role_mismatch=False)
                 if vals:
                     fallbacks_used[var].append('allow_unqualified_instructor')
             if not vals:
-                vals = generate_vals(allow_unqualified=False, allow_room_mismatch=True)
+                vals = generate_vals(allow_unqualified=False, allow_room_mismatch=True, allow_role_mismatch=False)
                 if vals:
                     fallbacks_used[var].append('allow_room_type_mismatch')
             if not vals:
-                vals = generate_vals(allow_unqualified=True, allow_room_mismatch=True)
+                vals = generate_vals(allow_unqualified=True, allow_room_mismatch=True, allow_role_mismatch=False)
                 if vals:
                     fallbacks_used[var].append('allow_unqualified_and_room_mismatch')
+            if not vals:
+                vals = generate_vals(allow_unqualified=True, allow_room_mismatch=True, allow_role_mismatch=True)
+                if vals:
+                    fallbacks_used[var].append('allow_all_including_role_mismatch')
             domains[var] = vals
             meta[var] = {'course': course_id, 'section': section_id, 'type': ctype}
 

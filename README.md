@@ -6,11 +6,13 @@ An intelligent automatic timetable generator that uses constraint satisfaction a
 
 - **Smart Constraint Satisfaction**: Uses advanced CSP algorithms with forward checking and backtracking
 - **Multi-Day Scheduling**: Distributes classes across Sunday-Thursday with intelligent day balancing
-- **Instructor Management**: Respects instructor preferences and qualifications
+- **Role-Based Assignment**: Automatically assigns Professors to lectures and Assistant Professors to labs
+- **Instructor Management**: Respects instructor preferences, qualifications, and role-based restrictions
 - **Dual Session Support**: Handles both lecture and lab sessions for courses
 - **Room Allocation**: Matches room types (lecture halls vs labs) with course requirements
-- **Web Interface**: User-friendly web interface for file uploads and timetable generation
-- **Excel Export**: Generates downloadable timetable in Excel format
+- **Web Interface**: User-friendly web interface with real-time feedback and timing information
+- **Formatted Excel Export**: Generates color-coded, chronologically sorted Excel files
+- **Performance Tracking**: Displays generation time and statistics on the website
 
 ## 🚀 Quick Start
 
@@ -20,6 +22,7 @@ An intelligent automatic timetable generator that uses constraint satisfaction a
 - Flask
 - pandas
 - xlsxwriter
+- openpyxl
 
 ### Installation
 
@@ -31,7 +34,12 @@ cd attg
 
 2. Install dependencies:
 ```bash
-pip install flask pandas xlsxwriter
+pip install -r requirements.txt
+```
+
+Or manually install:
+```bash
+pip install Flask pandas xlsxwriter openpyxl
 ```
 
 3. Run the application:
@@ -83,9 +91,14 @@ PROF02,Dr. Jane Doe,Assistant Professor,Not on Sunday,"LRA101,CSC111"
 **Required columns:**
 - `InstructorID`: Unique identifier for the instructor
 - `Name`: Full name of the instructor
-- `Role`: Position (Professor, Assistant Professor, etc.)
+- `Role`: Position (e.g., "Professor", "Assistant Professor") - **Important for role-based assignment**
 - `PreferredSlots`: Day preferences (e.g., "Not on Tuesday")
 - `QualifiedCourses`: Comma-separated list of courses they can teach
+
+**Note on Role-Based Assignment:**
+- Instructors with "Professor" role (without "Assistant") are assigned to **lecture sessions only**
+- Instructors with "Assistant Professor" role are assigned to **lab sessions only**
+- Proper role assignment ensures optimal instructor utilization
 
 ### 3. rooms.csv
 ```csv
@@ -134,10 +147,13 @@ SectionID,Semester,Capacity
 2. **Domain Building**: Creates possible assignments (course-room-instructor-time combinations)
 3. **Constraint Application**: 
    - Instructor qualifications and preferences
+   - **Role-based assignment** (Professors → Lectures, Assistant Professors → Labs)
    - Room type matching (lab courses → lab rooms)
    - Time conflict prevention
+   - Day preferences (respects "Not on [Day]" constraints)
 4. **CSP Solving**: Uses forward checking with backtracking to find valid assignments
-5. **Result Generation**: Outputs a complete timetable with balanced day distribution
+5. **Result Formatting**: Sorts chronologically by day and time, applies color coding
+6. **Performance Tracking**: Measures and reports generation time to the user
 
 ## 🔧 Algorithm Details
 
@@ -151,6 +167,7 @@ The timetable generation is modeled as a CSP with:
   - No instructor conflicts (same instructor, different courses, same time)
   - No room conflicts (same room, different courses, same time)
   - Instructor qualifications (instructor must be qualified for the course)
+  - **Role-based assignment** (Professors teach lectures, Assistant Professors teach labs)
   - Room type matching (lab courses require lab rooms)
   - Instructor day preferences (respect "Not on [Day]" preferences)
 
@@ -161,14 +178,51 @@ The timetable generation is modeled as a CSP with:
 - **Forward Checking**: Eliminates inconsistent values from future variables
 - **Backtracking**: Intelligent backtracking when conflicts arise
 
+### Role-Based Assignment System
+
+The system enforces instructor role-based assignments with intelligent fallbacks:
+
+1. **Strict Enforcement** (Priority 1):
+   - Professors are assigned to lecture sessions
+   - Assistant Professors are assigned to lab sessions
+   - All other constraints (qualifications, room types, preferences) are respected
+
+2. **Progressive Fallbacks** (Priority 2-4):
+   - If strict enforcement fails, the system progressively relaxes constraints:
+     - Allow unqualified instructors (if needed)
+     - Allow room type mismatches (if needed)
+     - Allow role mismatches (as last resort)
+
+3. **Diagnostic Tracking**:
+   - The system tracks which fallbacks were used for each assignment
+   - Rejection reasons are logged for debugging purposes
+
+This ensures the best possible timetable while maintaining role appropriateness wherever feasible.
+
 ## 🌐 Web Interface
 
 The web interface provides:
 
-1. **File Upload**: Drag-and-drop or click to upload CSV files
+1. **File Upload**: Drag-and-drop or click to upload CSV files for each data type
 2. **Data Validation**: Automatic validation of file formats and required columns
-3. **Progress Tracking**: Visual feedback during timetable generation
-4. **Excel Download**: One-click download of generated timetable
+3. **Real-time Feedback**: Visual progress indicators during generation
+4. **Performance Metrics**: Displays generation time and number of assignments
+5. **Formatted Excel Download**: One-click download of color-coded timetable
+
+### User Experience Features
+
+- **Smart Messaging**: Shows upload status, generation progress, and completion time
+- **Success Indicators**: Green checkmarks for successful uploads
+- **Error Handling**: Clear error messages if generation fails
+- **Download Automation**: Automatically triggers file download upon completion
+
+### Excel Output Features
+
+The generated Excel file includes:
+- **Color-coded sessions**: Yellow background for lectures, blue background for labs
+- **Chronological sorting**: Organized by day (Sunday → Thursday) and time (9:00 AM → 2:15 PM)
+- **Professional formatting**: Borders, proper column widths, centered text, and text wrapping
+- **Complete information**: Course details, instructor names (role-appropriate), rooms, and time slots
 
 ## 📈 Output Format
 
@@ -177,11 +231,20 @@ The generated timetable includes:
 - **CourseID**: Course identifier
 - **CourseName**: Full course name
 - **SectionID**: Section identifier (level/section format)
-- **Session**: Session type ("Lecture" or "Lab")
-- **Day**: Day of the week
-- **StartTime** & **EndTime**: Class timing
+- **Session**: Session type ("Lecture" or "Lab") - color-coded in Excel
+- **Day**: Day of the week (sorted: Sunday → Monday → Tuesday → Wednesday → Thursday)
+- **StartTime** & **EndTime**: Class timing (sorted chronologically within each day)
 - **Room**: Assigned room
-- **Instructor**: Assigned instructor name (not ID)
+- **Instructor**: Assigned instructor name (role-appropriate for session type)
+
+### Performance Metrics
+
+After generation completes, the system displays:
+- **Generation Time**: How long it took to create the timetable (in seconds)
+- **Total Assignments**: Number of scheduled sessions
+- Example: *"Generated in 16.21s (145 assignments)"*
+
+This information helps monitor system performance and understand the complexity of the generated schedule.
 
 ## 🔍 Troubleshooting
 
@@ -189,14 +252,25 @@ The generated timetable includes:
 
 1. **"No valid timetable found"**
    - Check instructor qualifications match course requirements
+   - Verify that you have enough Professors for all lectures and Assistant Professors for all labs
    - Ensure enough timeslots and rooms are available
    - Verify instructor day preferences aren't too restrictive
 
 2. **Missing courses in output**
    - Courses appear only if they have sections (auto-generated if needed)
    - Check that instructors are qualified for all courses
+   - Ensure proper role distribution (Professors for lectures, Assistant Professors for labs)
 
-3. **Uneven day distribution**
+3. **Role assignment issues**
+   - Verify the `Role` column in instructors.csv contains either "Professor" or "Assistant Professor"
+   - The system has fallback mechanisms but will prioritize role-appropriate assignments
+
+4. **Slow generation time**
+   - Large datasets (90+ courses) may take 15-30 seconds
+   - Performance metrics are displayed after completion
+   - Check server console for detailed timing logs
+
+5. **Uneven day distribution**
    - The algorithm uses randomization for balanced distribution
    - Run generation multiple times for different distributions
 
@@ -205,6 +279,7 @@ The generated timetable includes:
 The system provides detailed diagnostic information when generation fails, including:
 - Variables with empty domains
 - Constraint violation statistics
+- Role mismatch rejection counts
 - Fallback attempt results
 
 ## 👨‍💻 Development
