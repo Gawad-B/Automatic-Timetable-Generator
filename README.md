@@ -6,10 +6,11 @@ An intelligent automatic timetable generator that uses constraint satisfaction a
 
 - **Smart Constraint Satisfaction**: Uses advanced CSP algorithms with forward checking and backtracking
 - **Multi-Day Scheduling**: Distributes classes across Sunday-Thursday with intelligent day balancing
-- **Role-Based Assignment**: Automatically assigns Professors to lectures and Assistant Professors to labs
+- **Strict Role-Based Assignment**: Enforces Professors for lectures, Assistant Professors for labs and sections
+- **Multi-Session Support**: Handles Lecture, Lab, and Section sessions for courses
+- **Intelligent Room Matching**: Automatically assigns appropriate room types (Lecture halls, Labs, Section rooms)
+- **Department-Based Sections**: Smart section assignment by year and department (Years 3-4)
 - **Instructor Management**: Respects instructor preferences, qualifications, and role-based restrictions
-- **Dual Session Support**: Handles both lecture and lab sessions for courses
-- **Room Allocation**: Matches room types (lecture halls vs labs) with course requirements
 - **Web Interface**: User-friendly web interface with real-time feedback and timing information
 - **Formatted Excel Export**: Generates color-coded, chronologically sorted Excel files
 - **Performance Tracking**: Displays generation time and statistics on the website
@@ -71,7 +72,8 @@ The system requires 5 CSV files with the following formats:
 ```csv
 CourseID,CourseName,Credits,Type
 CSC111,Fundamentals of Programming,3,Lecture and Lab
-MTH111,Mathematics (1),3,Lecture and Lab
+MTH111,Mathematics (1),3,Lecture and Section
+PHY113,Physics (1),4,Lecture and Lab and Section
 LRA101,Japanese Culture,2,Lecture
 ```
 
@@ -79,7 +81,11 @@ LRA101,Japanese Culture,2,Lecture
 - `CourseID`: Unique identifier for the course
 - `CourseName`: Full name of the course
 - `Credits`: Number of credit hours
-- `Type`: Either "Lecture", "Lab", or "Lecture and Lab"
+- `Type`: Session type - can be:
+  - `"Lecture"` - Lecture only
+  - `"Lecture and Lab"` - Creates both Lecture and Lab sessions
+  - `"Lecture and Section"` - Creates both Lecture and Section sessions
+  - `"Lecture and Lab and Section"` - Creates all three session types
 
 ### 2. instructors.csv
 ```csv
@@ -97,21 +103,31 @@ PROF02,Dr. Jane Doe,Assistant Professor,Not on Sunday,"LRA101,CSC111"
 
 **Note on Role-Based Assignment:**
 - Instructors with "Professor" role (without "Assistant") are assigned to **lecture sessions only**
-- Instructors with "Assistant Professor" role are assigned to **lab sessions only**
-- Proper role assignment ensures optimal instructor utilization
+- Instructors with "Assistant Professor" role are assigned to **lab and section sessions only**
+- **This is a HARD constraint** - role mismatches are never allowed (no fallback)
+- Proper role assignment ensures optimal instructor utilization and academic standards
 
 ### 3. rooms.csv
 ```csv
 RoomID,Type,Capacity
-R101,Lecture,80
+R1,Lecture,80
 L1,Lab,35
-R102,Lecture,80
+S1,Section,35
+R2,Lecture,80
 ```
 
 **Required columns:**
 - `RoomID`: Unique identifier for the room
-- `Type`: Either "Lecture" or "Lab"
+- `Type`: Room type - can be:
+  - `"Lecture"` - For lecture sessions (typically larger capacity)
+  - `"Lab"` - For lab sessions (with equipment)
+  - `"Section"` - For section/discussion sessions (smaller groups)
 - `Capacity`: Maximum number of students
+
+**Room Naming Conventions:**
+- Lecture rooms: Typically start with "R" (e.g., R1, R2, R101)
+- Lab rooms: Typically start with "L" (e.g., L1, L2, L101)
+- Section rooms: Typically start with "S" (e.g., S1, S2, S10)
 
 ### 4. timeslots.csv
 ```csv
@@ -126,34 +142,47 @@ Monday,9:00 AM,10:30 AM
 - `StartTime`: Class start time
 - `EndTime`: Class end time
 
-### 5. sections.csv (Optional)
+### 5. sections.csv
 ```csv
-SectionID,Semester,Capacity
-1/1,fall,30
-1/2,fall,30
-2/1,fall,30
+SectionID,Capacity
+1/1,30
+1/2,30
+2/1,30
+3/CNC/1,30
+3/AID/1,30
+4/CNC/1,30
 ```
 
 **Required columns:**
-- `SectionID`: Section identifier (format: level/section)
-- `Semester`: Academic semester
+- `SectionID`: Section identifier with format:
+  - **Years 1-2**: `year/number` (e.g., "1/1", "1/2", "2/1")
+  - **Years 3-4**: `year/department/number` (e.g., "3/CNC/1", "4/AID/2")
 - `Capacity`: Maximum students per section
 
-**Note:** If sections.csv has fewer entries than courses, the system will automatically generate sections for all courses.
+**Section ID Format Rules:**
+- First part: Academic year (1, 2, 3, or 4)
+- **For Years 1-2**: Second part is section number
+- **For Years 3-4**: Second part is department code (CNC, AID, CSC, BIF, etc.), third part is section number
+- Department code is matched against first 3 letters of CourseID
+  - Example: Course "AID321" matches sections "3/AID/1", "3/AID/2", etc.
+  - Example: Course "CNC401" matches sections "4/CNC/1", "4/CNC/2", etc.
+
+**Note:** If sections.csv is not provided or has fewer entries than courses, the system will automatically generate appropriate sections for all courses based on their year level.
 
 ## 🎯 How It Works
 
 1. **Data Loading**: The system loads and validates all CSV files
-2. **Domain Building**: Creates possible assignments (course-room-instructor-time combinations)
-3. **Constraint Application**: 
+2. **Smart Course Assignment**: Automatically assigns courses to appropriate sections based on year and department
+3. **Session Type Parsing**: Analyzes course Type field to create appropriate session types (Lecture, Lab, Section)
+4. **Domain Building**: Creates possible assignments (course-room-instructor-time combinations) with strict constraints:
+   - **Room type matching**: Lecture sessions → Lecture rooms (R-series), Lab sessions → Lab rooms (L-series), Section sessions → Section rooms (S-series)
+   - **Role-based assignment**: Professors → Lecture sessions only, Assistant Professors → Lab and Section sessions only
    - Instructor qualifications and preferences
-   - **Role-based assignment** (Professors → Lectures, Assistant Professors → Labs)
-   - Room type matching (lab courses → lab rooms)
    - Time conflict prevention
    - Day preferences (respects "Not on [Day]" constraints)
-4. **CSP Solving**: Uses forward checking with backtracking to find valid assignments
-5. **Result Formatting**: Sorts chronologically by day and time, applies color coding
-6. **Performance Tracking**: Measures and reports generation time to the user
+5. **CSP Solving**: Uses forward checking with backtracking to find valid assignments
+6. **Result Formatting**: Sorts chronologically by day and time, applies color coding
+7. **Performance Tracking**: Measures and reports generation time to the user
 
 ## 🔧 Algorithm Details
 
@@ -161,14 +190,14 @@ SectionID,Semester,Capacity
 
 The timetable generation is modeled as a CSP with:
 
-- **Variables**: Each course section session (e.g., "CSC111::1/1::Lecture")
+- **Variables**: Each course section session (e.g., "CSC111::1/1::Lecture", "MTH111::1/2::Section")
 - **Domains**: All valid (timeslot, room, instructor) combinations
 - **Constraints**:
   - No instructor conflicts (same instructor, different courses, same time)
   - No room conflicts (same room, different courses, same time)
   - Instructor qualifications (instructor must be qualified for the course)
-  - **Role-based assignment** (Professors teach lectures, Assistant Professors teach labs)
-  - Room type matching (lab courses require lab rooms)
+  - **Strict role-based assignment** (Professors teach lectures ONLY, Assistant Professors teach labs and sections ONLY - no fallback)
+  - **Strict room type matching** (Lecture sessions use R-series rooms, Lab sessions use L-series rooms, Section sessions use S-series rooms)
   - Instructor day preferences (respect "Not on [Day]" preferences)
 
 ### Search Strategy
@@ -180,24 +209,33 @@ The timetable generation is modeled as a CSP with:
 
 ### Role-Based Assignment System
 
-The system enforces instructor role-based assignments with intelligent fallbacks:
+The system enforces **strict role-based assignment** to maintain academic standards:
 
-1. **Strict Enforcement** (Priority 1):
-   - Professors are assigned to lecture sessions
-   - Assistant Professors are assigned to lab sessions
-   - All other constraints (qualifications, room types, preferences) are respected
+1. **Hard Constraints** (Never Violated):
+   - **Professors**: Assigned to Lecture sessions ONLY
+   - **Assistant Professors**: Assigned to Lab and Section sessions ONLY
+   - Role mismatches are completely prevented during domain generation
+   - No fallback mechanism exists for role violations
 
-2. **Progressive Fallbacks** (Priority 2-4):
-   - If strict enforcement fails, the system progressively relaxes constraints:
+2. **Room Type Matching** (Strictly Enforced):
+   - **Lecture sessions**: Must use Lecture-type rooms (typically R-series)
+   - **Lab sessions**: Must use Lab-type rooms (typically L-series)
+   - **Section sessions**: Must use Section-type rooms (typically S-series)
+   - Room type mismatches for Lecture/Section sessions are prevented
+
+3. **Progressive Fallbacks** (For Other Constraints):
+   - If qualification/room constraints fail, the system has fallbacks:
      - Allow unqualified instructors (if needed)
-     - Allow room type mismatches (if needed)
-     - Allow role mismatches (as last resort)
+     - Allow room type mismatches for Labs (if needed)
+   - **Note**: Role constraints are NEVER relaxed
 
-3. **Diagnostic Tracking**:
-   - The system tracks which fallbacks were used for each assignment
-   - Rejection reasons are logged for debugging purposes
+4. **Smart Section Assignment**:
+   - **Years 1-2**: Courses assigned to any section of the same year
+   - **Years 3-4**: Courses assigned to sections matching both year AND department
+     - Example: "AID321" → "3/AID/1", "3/AID/2", etc.
+     - Example: "CNC401" → "4/CNC/1", "4/CNC/2", etc.
 
-This ensures the best possible timetable while maintaining role appropriateness wherever feasible.
+This ensures role-appropriate teaching assignments while maintaining flexibility for other constraints.
 
 ## 🌐 Web Interface
 
@@ -219,10 +257,10 @@ The web interface provides:
 ### Excel Output Features
 
 The generated Excel file includes:
-- **Color-coded sessions**: Yellow background for lectures, blue background for labs
+- **Color-coded sessions**: Yellow background for lectures, blue background for labs, green background for sections
 - **Chronological sorting**: Organized by day (Sunday → Thursday) and time (9:00 AM → 2:15 PM)
 - **Professional formatting**: Borders, proper column widths, centered text, and text wrapping
-- **Complete information**: Course details, instructor names (role-appropriate), rooms, and time slots
+- **Complete information**: Course details, instructor names (role-appropriate), rooms (type-matched), and time slots
 
 ## 📈 Output Format
 
@@ -230,12 +268,12 @@ The generated timetable includes:
 
 - **CourseID**: Course identifier
 - **CourseName**: Full course name
-- **SectionID**: Section identifier (level/section format)
-- **Session**: Session type ("Lecture" or "Lab") - color-coded in Excel
+- **SectionID**: Section identifier (e.g., "1/5" for Year 1, "3/CNC/1" for Year 3 CNC department)
+- **Session**: Session type ("Lecture", "Lab", or "Section") - color-coded in Excel
 - **Day**: Day of the week (sorted: Sunday → Monday → Tuesday → Wednesday → Thursday)
 - **StartTime** & **EndTime**: Class timing (sorted chronologically within each day)
-- **Room**: Assigned room
-- **Instructor**: Assigned instructor name (role-appropriate for session type)
+- **Room**: Assigned room (type-matched: R-series for Lectures, L-series for Labs, S-series for Sections)
+- **Instructor**: Assigned instructor name (role-appropriate: Professors for Lectures, Assistant Professors for Labs/Sections)
 
 ### Performance Metrics
 
@@ -252,18 +290,26 @@ This information helps monitor system performance and understand the complexity 
 
 1. **"No valid timetable found"**
    - Check instructor qualifications match course requirements
-   - Verify that you have enough Professors for all lectures and Assistant Professors for all labs
+   - **Verify sufficient Professors for all Lecture sessions** (strict requirement)
+   - **Verify sufficient Assistant Professors for all Lab and Section sessions** (strict requirement)
    - Ensure enough timeslots and rooms are available
-   - Verify instructor day preferences aren't too restrictive
+   - Verify appropriate room types: R-series for Lectures, L-series for Labs, S-series for Sections
+   - Check instructor day preferences aren't too restrictive
 
 2. **Missing courses in output**
-   - Courses appear only if they have sections (auto-generated if needed)
+   - Courses appear only if they have sections (auto-generated based on year/department if needed)
    - Check that instructors are qualified for all courses
-   - Ensure proper role distribution (Professors for lectures, Assistant Professors for labs)
+   - **Ensure proper role distribution** (cannot assign Professors to Labs/Sections, or Assistant Professors to Lectures)
 
-3. **Role assignment issues**
+3. **Section assignment issues (Years 3-4)**
+   - Verify section IDs follow format: "year/department/number" (e.g., "3/CNC/1", "4/AID/2")
+   - Department code must match first 3 letters of CourseID
+   - Example: AID courses need AID sections, CNC courses need CNC sections
+
+4. **Role assignment is strict**
    - Verify the `Role` column in instructors.csv contains either "Professor" or "Assistant Professor"
-   - The system has fallback mechanisms but will prioritize role-appropriate assignments
+   - **The system has NO fallback for role mismatches** - this is a hard constraint
+   - If generation fails, you may need to adjust instructor roles or hire additional staff
 
 4. **Slow generation time**
    - Large datasets (90+ courses) may take 15-30 seconds
