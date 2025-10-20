@@ -45,6 +45,63 @@ def parse_qualified_courses(val):
     return []
 
 
+def can_assign_course_to_section(course_id, section_id, course_year):
+    """
+    Check if a course can be assigned to a section based on year and department rules.
+    
+    Rules:
+    - For years 1-2: section format is "year/number" (e.g., "1/5", "2/3")
+      Course is assigned if section year matches course year
+    - For years 3-4: section format is "year/department/number" (e.g., "3/CNC/1", "4/AID/2")
+      Course is assigned if:
+        1. Section year matches course year AND
+        2. Course department (first 3 letters) matches section department
+    
+    Args:
+        course_id: Course identifier (e.g., "CSC111", "AID321")
+        section_id: Section identifier (e.g., "1/5", "3/CNC/1", "4/AID/2")
+        course_year: Year level of the course (1, 2, 3, or 4)
+    
+    Returns:
+        bool: True if course can be assigned to this section
+    """
+    if not section_id or '/' not in str(section_id):
+        return True  # If no proper section format, allow assignment
+    
+    parts = str(section_id).split('/')
+    if len(parts) < 2:
+        return True
+    
+    section_year_str = parts[0].strip()
+    # For years 3-4: extract department from 2nd part (e.g., "3/CNC/1" -> "CNC")
+    # For years 1-2: use 2nd part directly (e.g., "1/5" -> "5")
+    section_right = parts[1].strip() if len(parts) >= 2 else ""
+    
+    try:
+        section_year = int(section_year_str)
+    except ValueError:
+        return True  # If section year is not a number, allow assignment
+    
+    # Check if course year matches section year
+    if course_year != section_year:
+        return False
+    
+    # For years 1-2, only year matching is required
+    if course_year in [1, 2]:
+        return True
+    
+    # For years 3-4, also check department matching
+    if course_year in [3, 4]:
+        # Extract department from course ID (first 3 letters)
+        course_dept = course_id[:3].upper() if len(course_id) >= 3 else ""
+        section_dept = section_right.upper()
+        
+        # Course department must match section department
+        return course_dept == section_dept
+    
+    return True
+
+
 
 def build_domains(courses_df, instructors_df, rooms_df, timeslots_df, sections_df, force_permissive=False):
     # Required columns checks
@@ -68,82 +125,102 @@ def build_domains(courses_df, instructors_df, rooms_df, timeslots_df, sections_d
         instructors_df['_quals'] = [[] for _ in range(len(instructors_df))]
 
     course_types = dict(zip(courses_df['CourseID'], courses_df['Type']))
+    
+    # Create a mapping for course years
+    course_years = {}
+    if 'Year' in courses_df.columns:
+        course_years = dict(zip(courses_df['CourseID'], courses_df['Year']))
 
     if 'SectionID' not in sections_df.columns:
         raise ValueError('sections.csv must include SectionID')
 
-    # Auto-generate sections for all courses if needed
-    if len(sections_df) < len(courses_df):
-        print(f'[csp] Auto-generating sections for all {len(courses_df)} courses')
-        new_sections = []
-        for idx, course in courses_df.iterrows():
-            course_id = str(course['CourseID'])
-            # Generate section ID to match original pattern: level/section format
-            # Extract level from course ID (e.g., CSC111 -> 1, CSC221 -> 2, etc.)
-            level = 1
-            if len(course_id) >= 4 and course_id[-3:].isdigit():
-                level_digit = course_id[-3]
-                if level_digit.isdigit():
-                    level = int(level_digit)
-            section_num = (idx % 10) + 1  # Distribute sections 1-10
-            section_id = f"{level}/{section_num}"
-            
-            # Determine required lectures based on course type
-            course_type = course.get('Type', 'Lecture')
-            if 'Lab' in course_type:
-                required_lectures = 2  # Both lecture and lab
-            else:
-                required_lectures = 1  # Lecture only
-            
-            new_sections.append({
-                'SectionID': section_id,
-                'CourseID': course_id,
-                'Semester': 'fall',
-                'Capacity': 30,
-                'RequiredLectures': required_lectures
-            })
-        sections_df = pd.DataFrame(new_sections)
-        print(f'[csp] Generated {len(sections_df)} sections for all courses')
+    # Don't auto-generate sections - use the provided sections and assign courses smartly
+    # (The old auto-generation logic has been removed to use smart course-section matching)
 
     if 'CourseID' not in sections_df.columns:
-        course_ids = list(map(str, courses_df['CourseID'].astype(str)))
-        n_sections = len(sections_df)
-        n_courses = len(course_ids)
-        inferred = None
-        if n_courses > 0 and n_sections % n_courses == 0:
-            chunk = n_sections // n_courses
-            inferred = []
-            for i in range(n_sections):
-                inferred.append(course_ids[i // chunk])
-
-        if inferred is None or not all(inferred):
-            import re
-            course_ids_set = set(course_ids)
-            inferred = []
-            for sid in sections_df['SectionID'].astype(str):
-                found = None
-                for sep in ('-', '_', ':'):
-                    if sep in sid:
-                        cand = sid.split(sep, 1)[0]
-                        if cand in course_ids_set:
-                            found = cand
-                            break
-                if not found:
-                    m = re.match(r'([A-Za-z0-9]+)', sid)
-                    if m and m.group(1) in course_ids_set:
-                        found = m.group(1)
-                inferred.append(found)
-
-        if all(x is not None for x in inferred):
-            sections_df = sections_df.copy()
-            sections_df['CourseID'] = inferred
+        # Smart assignment of courses to sections based on year and department rules
+        # Each course is assigned to ONE appropriate section
+        print('[csp] CourseID not found in sections - performing smart course assignment')
+        
+        sections_list = []
+        assigned_courses = set()
+        
+        # Group sections by year and department
+        section_groups = {}
+        for _, sec in sections_df.iterrows():
+            section_id = str(sec['SectionID'])
+            if '/' in section_id:
+                parts = section_id.split('/')
+                year_str = parts[0]
+                try:
+                    year = int(year_str)
+                    # For years 3-4: extract department (2nd part), ignore section number (3rd part)
+                    # e.g., "3/CNC/1" -> key is (3, "CNC")
+                    # For years 1-2: section format is "1/5" -> key is (1, None)
+                    if year in [3, 4] and len(parts) >= 2:
+                        dept = parts[1]  # Extract department (CNC, AID, CSC, BIF, etc.)
+                        key = (year, dept)
+                    else:
+                        key = (year, None)
+                    
+                    if key not in section_groups:
+                        section_groups[key] = []
+                    section_groups[key].append(sec)
+                except ValueError:
+                    pass
+        
+        # Assign each course to one section from the appropriate group
+        for _, course in courses_df.iterrows():
+            course_id = course['CourseID']
+            course_year = course_years.get(course_id)
+            
+            if course_year is None:
+                continue
+            
+            # Find the appropriate section group
+            if course_year in [1, 2]:
+                # Years 1-2: just match by year
+                key = (course_year, None)
+                matching_sections = section_groups.get(key, [])
+            elif course_year in [3, 4]:
+                # Years 3-4: match by year AND department
+                course_dept = course_id[:3].upper() if len(course_id) >= 3 else ""
+                key = (course_year, course_dept)
+                matching_sections = section_groups.get(key, [])
+            else:
+                matching_sections = []
+            
+            # Assign to the first available section in the group
+            # (distribute courses round-robin across sections in the group)
+            if matching_sections:
+                # Use modulo to distribute courses across available sections
+                section_idx = len([c for c in assigned_courses if course_years.get(c) == course_year]) % len(matching_sections)
+                sec = matching_sections[section_idx]
+                
+                # Get course type for RequiredLectures
+                course_type = course_types.get(course_id, 'Lecture')
+                required_lectures = 2 if 'Lab' in course_type else 1
+                
+                sections_list.append({
+                    'SectionID': sec['SectionID'],
+                    'CourseID': course_id,
+                    'Semester': sec.get('Semester', 'fall'),
+                    'Capacity': sec.get('Capacity', 30),
+                    'RequiredLectures': required_lectures
+                })
+                assigned_courses.add(course_id)
+            else:
+                print(f'[csp] Warning: No matching section found for course {course_id} (Year {course_year})')
+        
+        if sections_list:
+            sections_df = pd.DataFrame(sections_list)
+            print(f'[csp] Assigned {len(sections_df)} courses to sections')
+            # Show distribution
+            for year in sorted(set([course_years.get(c) for c in assigned_courses if course_years.get(c)])):
+                year_count = len([c for c in assigned_courses if course_years.get(c) == year])
+                print(f'[csp]   Year {int(year)}: {year_count} courses')
         else:
-            print('[csp] Warning: could not infer CourseID for some SectionIDs; assigning courses round-robin')
-            if len(course_ids) == 0:
-                raise ValueError('No courses available to assign to sections')
-            sections_df = sections_df.copy()
-            n_sections = len(sections_df)
-            sections_df['CourseID'] = [course_ids[i % len(course_ids)] for i in range(n_sections)]
+            raise ValueError('No valid section-course assignments could be created with the given year/department rules')
 
     if 'RequiredLectures' not in sections_df.columns:
         sections_df['RequiredLectures'] = 1
@@ -170,18 +247,38 @@ def build_domains(courses_df, instructors_df, rooms_df, timeslots_df, sections_d
     for _, sec in sections_df.iterrows():
         course_id = sec['CourseID']
         section_id = sec['SectionID']
+        
+        # Get course year
+        course_year = course_years.get(course_id, None)
+        
+        # Check if this course can be assigned to this section
+        if course_year is not None:
+            if not can_assign_course_to_section(course_id, section_id, course_year):
+                # Skip this section-course combination as it violates year/department rules
+                continue
+        
         req = int(sec.get('RequiredLectures', 1))
         ctype = course_types.get(course_id, 'Lecture')
-        for i in range(req):
-            # Create more descriptive lecture names
-            if 'Lab' in ctype and req > 1:
-                if i == 0:
-                    lecture_name = "Lecture"
-                else:
-                    lecture_name = "Lab"
-            else:
-                lecture_name = f"Session{i+1}" if req > 1 else "Lecture"
-            
+        
+        # Parse the course type to determine session types needed
+        ctype_lower = ctype.lower() if isinstance(ctype, str) else 'lecture'
+        needs_lecture = 'lecture' in ctype_lower
+        needs_lab = 'lab' in ctype_lower
+        needs_section = 'section' in ctype_lower or 'seection' in ctype_lower  # handle typo in data
+        
+        sessions_to_create = []
+        if needs_lecture:
+            sessions_to_create.append(('Lecture', 'Lecture'))
+        if needs_lab:
+            sessions_to_create.append(('Lab', 'Lab'))
+        if needs_section:
+            sessions_to_create.append(('Section', 'Section'))
+        
+        # If no specific type found, default to Lecture
+        if not sessions_to_create:
+            sessions_to_create = [('Lecture', 'Lecture')]
+        
+        for session_type, lecture_name in sessions_to_create:
             var = f"{course_id}::{section_id}::{lecture_name}"
             variables.append(var)
 
@@ -191,8 +288,15 @@ def build_domains(courses_df, instructors_df, rooms_df, timeslots_df, sections_d
                     for room in rooms:
                         rtype = room.get('Type', 'Lecture')
                         room_mismatch = False
-                        if (ctype.lower().startswith('lab') and not rtype.lower().startswith('lab')) or (ctype.lower().startswith('lecture') and rtype.lower().startswith('lab')):
+                        
+                        # Match room type to session type
+                        if session_type.lower() == 'lab' and not rtype.lower().startswith('lab'):
                             room_mismatch = True
+                        elif session_type.lower() == 'lecture' and (rtype.lower().startswith('lab') or rtype.lower() == 'section'):
+                            room_mismatch = True
+                        elif session_type.lower() == 'section' and rtype.lower() != 'section':
+                            room_mismatch = True
+                        
                         for instr in instructors:
                             quals = instr.get('_quals', [])
                             instr_unqualified = False
@@ -208,20 +312,20 @@ def build_domains(courses_df, instructors_df, rooms_df, timeslots_df, sections_d
                                 if 'Not on' in pref_slots and day in pref_slots:
                                     instr_unavailable = True
                             
-                            # Check role-based assignment: Professors -> Lectures, Assistant Professors -> Labs
+                            # Check role-based assignment: Professors -> Lectures, Assistant Professors -> Labs & Sections
                             instr_role = str(instr.get('Role', '')).lower()
-                            is_lab_session = 'lab' in lecture_name.lower() if isinstance(lecture_name, str) else False
+                            is_lab_or_section = ('lab' in lecture_name.lower() or 'section' in lecture_name.lower()) if isinstance(lecture_name, str) else False
                             role_mismatch = False
                             
                             if instr_role and not allow_role_mismatch:
-                                # Assistant Professor should only teach labs
-                                if 'assistant' in instr_role and not is_lab_session:
+                                # Assistant Professor should only teach labs and sections (not lectures)
+                                if 'assistant' in instr_role and not is_lab_or_section:
                                     role_mismatch = True
                                     rejection_reasons[var]['role_mismatch_assistant_to_lecture'] += 1
-                                # Professor should only teach lectures (not labs)
-                                elif 'professor' in instr_role and 'assistant' not in instr_role and is_lab_session:
+                                # Professor should only teach lectures (not labs or sections)
+                                elif 'professor' in instr_role and 'assistant' not in instr_role and is_lab_or_section:
                                     role_mismatch = True
-                                    rejection_reasons[var]['role_mismatch_professor_to_lab'] += 1
+                                    rejection_reasons[var]['role_mismatch_professor_to_lab_or_section'] += 1
                             
                             if instr_unqualified and not allow_unqualified:
                                 rejection_reasons[var]['unqualified_instructor'] += 1
@@ -238,7 +342,8 @@ def build_domains(courses_df, instructors_df, rooms_df, timeslots_df, sections_d
                 return vals_local
 
             if force_permissive:
-                vals = generate_vals(allow_unqualified=True, allow_room_mismatch=True, allow_role_mismatch=True)
+                # Even in permissive mode, NEVER allow role mismatch (hard constraint)
+                vals = generate_vals(allow_unqualified=True, allow_room_mismatch=True, allow_role_mismatch=False)
                 if vals:
                     fallbacks_used[var].append('force_permissive_initial')
             else:
@@ -255,10 +360,7 @@ def build_domains(courses_df, instructors_df, rooms_df, timeslots_df, sections_d
                 vals = generate_vals(allow_unqualified=True, allow_room_mismatch=True, allow_role_mismatch=False)
                 if vals:
                     fallbacks_used[var].append('allow_unqualified_and_room_mismatch')
-            if not vals:
-                vals = generate_vals(allow_unqualified=True, allow_room_mismatch=True, allow_role_mismatch=True)
-                if vals:
-                    fallbacks_used[var].append('allow_all_including_role_mismatch')
+            # REMOVED: Role mismatch fallback - role is a HARD constraint and should never be violated
             domains[var] = vals
             meta[var] = {'course': course_id, 'section': section_id, 'type': ctype}
 
