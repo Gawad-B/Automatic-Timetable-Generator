@@ -152,18 +152,19 @@
 				message._hide = function() { message.classList.remove('visible'); };
 
 				gen.addEventListener('click', function() {
-					message._show('success', 'Generating...');
+					message._show('success', 'Generating timetables...');
 					fetch('/generate', { method: 'POST' })
 					.then(function(res) {
 						if (!res.ok) return res.json().then(function(j){ throw new Error(j.message || 'Generate failed'); });
 						// Extract timing information from headers
 						var genTime = res.headers.get('X-Generation-Time');
 						var totalAssignments = res.headers.get('X-Total-Assignments');
+						var totalFiles = res.headers.get('X-Total-Files');
 						var timingInfo = '';
 						if (genTime) {
 							timingInfo = 'Generated in ' + genTime + 's';
-							if (totalAssignments) {
-								timingInfo += ' (' + totalAssignments + ' assignments)';
+							if (totalFiles) {
+								timingInfo += ' (' + totalFiles + ' files)';
 							}
 						}
 						return res.blob().then(function(blob) {
@@ -174,7 +175,7 @@
 						var url = window.URL.createObjectURL(data.blob);
 						var a = document.createElement('a');
 						a.href = url;
-						a.download = 'timetable.xlsx';
+						a.download = 'timetables.zip';
 						document.body.appendChild(a);
 						a.click();
 						a.remove();

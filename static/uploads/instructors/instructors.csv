@@ -11,7 +11,7 @@ PROF09,Prof. Mostafa Soliman,Professor,Not on Monday,"CSE214, CSC115, CSC315, CN
 PROF10,Dr. Ahmed Abdel-Malk,Professor,Not on Thursday,"ECE324, CNC325, ECE214"
 PROF11,Dr. Ahmed Bayumi,Professor,Not on Sunday,"AID428, AID312, CSC415, BIF327, AID412, AID422"
 PROF12,Dr. Hataba,Professor,Not on Tuesday,"CNC418, CNC419, CSC317, CSE423"
-PROF13,Dr. Reda,Professor,Not on Wednesday,"CNC312, AID426, CSC317, CSC422"
+PROF13,Dr. Reda,Professor,Not on Wednesday,"CNC312, AID426, CSC317, CSC422 CSE423"
 PROF14,Prof. Samir Ahmed,Professor,Not on Monday,"CNC413, CNC311, CNC323, CNC324, CNC327, AID413"
 PROF15,Dr. Mohamed Issa,Professor,Not on Thursday,"BIF425, AID417, CNC314, CSC122, BIF321, BIF323, BIF328"
 PROF16,Dr. Mustafa AlSayed,Professor,Not on Sunday,"CSC426, CSC412, CNC415, CSC314, CSC414"
@@ -31,9 +31,9 @@ PROF29,Prof. Said Sadik,Professor,Not on Monday,"LRA206, LRA306"
 PROF30,Dr. Maali Fouad,Professor,Not on Thursday,LRA405
 PROF31,Prof. Mohamed Hassan,Professor,Not on Sunday,"LRA409, LRA208"
 PROF32,Dr. Amal Gomaa,Professor,Not on Tuesday,"LRA410, LRA103"
-PROF33,Dr. Kenji Tanaka,Professor,Not on Sunday,"LRA401, LRA402, LRA403"
-PROF34,Dr. Yumi Yamamoto,Professor,Not on Thursday,"LRA401, LRA402, LRA404"
-PROF35,Dr. Haruto Ito,Professor,Not on Sunday,"LRA401, LRA403, LRA404"
+PROF33,Dr. Kenji Tanaka,Professor,Not on Sunday,"LRA401, LRA402, LRA403, LRA404"
+PROF34,Dr. Yumi Yamamoto,Professor,Not on Thursday,"LRA401, LRA402, LRA403, LRA404"
+PROF35,Dr. Haruto Ito,Professor,Not on Sunday,"LRA401, LRA402, LRA403, LRA404"
 AP01,Eng. Fatma Elsayed,Assistant Professor,Not on Sunday,"AID417, CNC311, CSC122, BIF328, CNC321, CNC422"
 AP02,Eng. Nada Essam,Assistant Professor,Not on Tuesday,"AID411, BIF425, CSC121, CSC122, AID325"
 AP03,Eng. Salma Alashry,Assistant Professor,Not on Wednesday,"AID321, CNC314, CSC114, CSC122, AID322, CSC321, CSC322"
@@ -54,3 +54,18 @@ AP17,Eng. Maria Mounir,Assistant Professor,Not on Tuesday,"CSC221, CNC323, CSC42
 AP18,Eng. Alaa Essam,Assistant Professor,Not on Wednesday,"BIF323, AID421"
 AP19,Eng. Bassant Tolba,Assistant Professor,Not on Monday,CNC325
 AP20,Eng. Menna Mahmoud,Assistant Professor,Not on Thursday,"CNC327, AID422"
+AP21,Eng. Hassan Omar,Assistant Professor,Not on Sunday,PHY113
+AP22,Eng. Yasmin Khaled,Assistant Professor,Not on Tuesday,PHY113
+AP23,Eng. Omar Farid,Assistant Professor,Not on Wednesday,PHY113
+AP24,Eng. Hana Samir,Assistant Professor,Not on Monday,PHY113
+AP25,Eng. Karim Youssef,Assistant Professor,Not on Thursday,PHY113
+AP26,Eng. Sara Ahmed,Assistant Professor,Not on Sunday,"MTH111, ACM215, MTH212"
+AP27,Eng. Ahmed Mahmoud,Assistant Professor,Not on Tuesday,"MTH111, ACM215, MTH212"
+AP28,Eng. Nour Hassan,Assistant Professor,Not on Wednesday,"MTH111, ACM215, MTH212"
+AP29,Eng. Mona Said,Assistant Professor,Not on Monday,"MTH111, ACM215, MTH212"
+AP30,Eng. Youssef Ali,Assistant Professor,Not on Thursday,"MTH111, ACM215, MTH212"
+AP31,Eng. Rania Hassan,Assistant Professor,Not on Sunday,"BIF311, BIF410, BIF411, BIF412, BIF413"
+AP32,Eng. Mohamed Salah,Assistant Professor,Not on Tuesday,"BIF311, BIF410, BIF411, BIF413, BIF424"
+AP33,Eng. Dina Ibrahim,Assistant Professor,Not on Wednesday,"BIF311, BIF410, BIF412, BIF424, BIF425"
+AP34,Eng. Khaled Mostafa,Assistant Professor,Not on Monday,"BIF311, BIF411, BIF412, BIF413, BIF425"
+AP35,Eng. Amira Youssef,Assistant Professor,Not on Thursday,"BIF311, BIF410, BIF413, BIF424, BIF425"

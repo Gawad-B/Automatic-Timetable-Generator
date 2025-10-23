@@ -1,5 +1,15 @@
+# Web Framework
 Flask>=2.0.0
+
+# Data Processing
 pandas>=1.3.0
+
+# Excel File Generation
 xlsxwriter>=3.0.0
 openpyxl>=3.0.0
+
+# Web Server Utilities
 Werkzeug>=2.0.0
+
+# Note: zipfile is part of Python standard library (no installation needed)
+# Note: Requires Python 3.7+ for proper type hints and dictionary ordering

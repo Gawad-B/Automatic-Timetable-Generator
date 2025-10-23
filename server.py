@@ -7,6 +7,7 @@ import pandas as pd
 import xlsxwriter
 import csp
 import traceback
+import zipfile
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_BASE = os.path.join(BASE_DIR, 'static', 'uploads')
@@ -18,6 +19,97 @@ ALLOWED_TARGETS = {'courses', 'instructors', 'rooms', 'timeslots', 'sections'}
 
 
 app = Flask(__name__)
+
+def create_excel_timetable(df, title="Timetable"):
+    """
+    Create an Excel file from a timetable DataFrame
+    Returns BytesIO object containing the Excel file
+    """
+    output = BytesIO()
+    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
+    worksheet = workbook.add_worksheet('Timetable')
+    
+    # Define formats
+    header_format = workbook.add_format({
+        'bold': True,
+        'bg_color': '#D9D9D9',
+        'border': 1,
+        'align': 'center',
+        'valign': 'vcenter'
+    })
+    
+    lecture_format = workbook.add_format({
+        'bg_color': '#FFD966',  # Yellow for lectures
+        'border': 1,
+        'align': 'center',
+        'valign': 'vcenter',
+        'text_wrap': True
+    })
+    
+    lab_format = workbook.add_format({
+        'bg_color': '#9FC5E8',  # Blue for labs
+        'border': 1,
+        'align': 'center',
+        'valign': 'vcenter',
+        'text_wrap': True
+    })
+    
+    tut_format = workbook.add_format({
+        'bg_color': '#B4A7D6',  # Purple for tutorials
+        'border': 1,
+        'align': 'center',
+        'valign': 'vcenter',
+        'text_wrap': True
+    })
+    
+    cell_format = workbook.add_format({
+        'border': 1,
+        'align': 'center',
+        'valign': 'vcenter',
+        'text_wrap': True
+    })
+    
+    # Write headers
+    headers = ['CourseID', 'CourseName', 'SectionID', 'Session', 'Day', 'StartTime', 'EndTime', 'Room', 'Instructor']
+    for col, header in enumerate(headers):
+        worksheet.write(0, col, header, header_format)
+    
+    # Write data rows
+    for row_idx, row in enumerate(df.itertuples(index=False), start=1):
+        session = getattr(row, 'Session', '')
+        session_lower = str(session).lower()
+        
+        if 'lab' in session_lower:
+            session_format = lab_format
+        elif 'tut' in session_lower:
+            session_format = tut_format
+        else:
+            session_format = lecture_format
+        
+        worksheet.write(row_idx, 0, getattr(row, 'CourseID', ''), cell_format)
+        worksheet.write(row_idx, 1, getattr(row, 'CourseName', ''), cell_format)
+        worksheet.write(row_idx, 2, getattr(row, 'SectionID', ''), cell_format)
+        worksheet.write(row_idx, 3, session, session_format)
+        worksheet.write(row_idx, 4, getattr(row, 'Day', ''), cell_format)
+        worksheet.write(row_idx, 5, getattr(row, 'StartTime', ''), cell_format)
+        worksheet.write(row_idx, 6, getattr(row, 'EndTime', ''), cell_format)
+        worksheet.write(row_idx, 7, getattr(row, 'Room', ''), cell_format)
+        worksheet.write(row_idx, 8, getattr(row, 'Instructor', ''), cell_format)
+    
+    # Set column widths
+    worksheet.set_column(0, 0, 12)  # CourseID
+    worksheet.set_column(1, 1, 30)  # CourseName
+    worksheet.set_column(2, 2, 12)  # SectionID
+    worksheet.set_column(3, 3, 12)  # Session
+    worksheet.set_column(4, 4, 12)  # Day
+    worksheet.set_column(5, 5, 12)  # StartTime
+    worksheet.set_column(6, 6, 12)  # EndTime
+    worksheet.set_column(7, 7, 10)  # Room
+    worksheet.set_column(8, 8, 25)  # Instructor
+    
+    workbook.close()
+    output.seek(0)
+    return output
 
 @app.route('/')
 def home():
@@ -47,11 +139,10 @@ def generate():
         traceback.print_exc()
         return jsonify(success=False, message=str(e)), 500
 
-    # Sort by day of week (Sunday, Monday, Tuesday, etc.) and then by time
+    # Sort by day of week and time
     day_order = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
     df['DayOrder'] = df['Day'].map(lambda x: day_order.index(x) if x in day_order else 999)
     
-    # Convert time to sortable format (handle AM/PM)
     def time_to_minutes(time_str):
         """Convert time string like '9:00 AM' to minutes since midnight for sorting"""
         try:
@@ -63,90 +154,81 @@ def generate():
                 hours = 0
             return hours * 60 + minutes
         except:
-            return 9999  # Put invalid times at the end
+            return 9999
     
     df['TimeOrder'] = df['StartTime'].apply(time_to_minutes)
-    df = df.sort_values(['DayOrder', 'TimeOrder', 'CourseID']).drop(['DayOrder', 'TimeOrder'], axis=1).reset_index(drop=True)
+    df_sorted = df.sort_values(['DayOrder', 'TimeOrder', 'CourseID']).drop(['DayOrder', 'TimeOrder'], axis=1).reset_index(drop=True)
 
-    # Write to Excel in-memory using xlsxwriter for custom formatting
-    output = BytesIO()
-    workbook = xlsxwriter.Workbook(output, {'in_memory': True})
-    worksheet = workbook.add_worksheet('Timetable')
+    # Extract year from SectionID for year-based filtering
+    def extract_year_from_section(section_id):
+        """Extract year from section ID like '1/5', '2/3', '3/AID/1', '4/BIF/2'"""
+        try:
+            if pd.notna(section_id):
+                parts = str(section_id).split('/')
+                if parts:
+                    return int(parts[0])
+        except:
+            pass
+        return None
     
-    # Define formats similar to the sample PDF
-    header_format = workbook.add_format({
-        'bold': True,
-        'bg_color': '#D9D9D9',
-        'border': 1,
-        'align': 'center',
-        'valign': 'vcenter'
-    })
+    df_sorted['Year'] = df_sorted['SectionID'].apply(extract_year_from_section)
     
-    # Different colors for different session types
-    lecture_format = workbook.add_format({
-        'bg_color': '#FFD966',  # Yellow for lectures
-        'border': 1,
-        'align': 'center',
-        'valign': 'vcenter',
-        'text_wrap': True
-    })
-    
-    lab_format = workbook.add_format({
-        'bg_color': '#9FC5E8',  # Blue for labs
-        'border': 1,
-        'align': 'center',
-        'valign': 'vcenter',
-        'text_wrap': True
-    })
-    
-    cell_format = workbook.add_format({
-        'border': 1,
-        'align': 'center',
-        'valign': 'vcenter',
-        'text_wrap': True
-    })
-    
-    # Write headers
-    headers = ['CourseID', 'CourseName', 'SectionID', 'Session', 'Day', 'StartTime', 'EndTime', 'Room', 'Instructor']
-    for col, header in enumerate(headers):
-        worksheet.write(0, col, header, header_format)
-    
-    # Write data rows
-    for row_idx, row in enumerate(df.itertuples(index=False), start=1):
-        # Determine format based on session type
-        session = getattr(row, 'Session', '')
-        is_lab = 'lab' in str(session).lower()
-        session_format = lab_format if is_lab else lecture_format
+    # Create zip file in memory
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
         
-        worksheet.write(row_idx, 0, getattr(row, 'CourseID', ''), cell_format)
-        worksheet.write(row_idx, 1, getattr(row, 'CourseName', ''), cell_format)
-        worksheet.write(row_idx, 2, getattr(row, 'SectionID', ''), cell_format)
-        worksheet.write(row_idx, 3, session, session_format)
-        worksheet.write(row_idx, 4, getattr(row, 'Day', ''), cell_format)
-        worksheet.write(row_idx, 5, getattr(row, 'StartTime', ''), cell_format)
-        worksheet.write(row_idx, 6, getattr(row, 'EndTime', ''), cell_format)
-        worksheet.write(row_idx, 7, getattr(row, 'Room', ''), cell_format)
-        worksheet.write(row_idx, 8, getattr(row, 'Instructor', ''), cell_format)
+        # 1. Main timetable
+        print("[generate] Creating main timetable...")
+        main_excel = create_excel_timetable(df_sorted.drop('Year', axis=1), "Main Timetable")
+        zip_file.writestr('Main_Timetable.xlsx', main_excel.getvalue())
+        
+        # 2. Year-specific timetables
+        print("[generate] Creating year-specific timetables...")
+        years = sorted([y for y in df_sorted['Year'].unique() if pd.notna(y)])
+        for year in years:
+            year_df = df_sorted[df_sorted['Year'] == year].drop('Year', axis=1).copy()
+            year_excel = create_excel_timetable(year_df, f"Year {year} Timetable")
+            zip_file.writestr(f'Years/Year_{year}.xlsx', year_excel.getvalue())
+        
+        print(f"[generate] Created {len(years)} year timetables")
+        
+        # 3. Individual instructor timetables
+        print("[generate] Creating instructor timetables...")
+        instructors = df_sorted['Instructor'].unique()
+        for instructor in instructors:
+            if pd.notna(instructor) and str(instructor).strip():
+                instructor_df = df_sorted[df_sorted['Instructor'] == instructor].drop('Year', axis=1).copy()
+                instructor_excel = create_excel_timetable(instructor_df, f"Timetable - {instructor}")
+                # Sanitize filename
+                safe_name = str(instructor).replace('/', '_').replace('\\', '_').replace(':', '_')
+                zip_file.writestr(f'Instructors/{safe_name}.xlsx', instructor_excel.getvalue())
+        
+        print(f"[generate] Created {len(instructors)} instructor timetables")
+        
+        # 4. Individual room timetables
+        print("[generate] Creating room timetables...")
+        rooms = df_sorted['Room'].unique()
+        for room in rooms:
+            if pd.notna(room) and str(room).strip():
+                room_df = df_sorted[df_sorted['Room'] == room].drop('Year', axis=1).copy()
+                room_excel = create_excel_timetable(room_df, f"Timetable - Room {room}")
+                # Sanitize filename
+                safe_name = str(room).replace('/', '_').replace('\\', '_').replace(':', '_')
+                zip_file.writestr(f'Rooms/{safe_name}.xlsx', room_excel.getvalue())
+        
+        print(f"[generate] Created {len(rooms)} room timetables")
     
-    # Set column widths for better readability
-    worksheet.set_column(0, 0, 12)  # CourseID
-    worksheet.set_column(1, 1, 30)  # CourseName
-    worksheet.set_column(2, 2, 12)  # SectionID
-    worksheet.set_column(3, 3, 12)  # Session
-    worksheet.set_column(4, 4, 12)  # Day
-    worksheet.set_column(5, 5, 12)  # StartTime
-    worksheet.set_column(6, 6, 12)  # EndTime
-    worksheet.set_column(7, 7, 10)  # Room
-    worksheet.set_column(8, 8, 25)  # Instructor
+    zip_buffer.seek(0)
     
-    workbook.close()
-    output.seek(0)
+    total_files = 1 + len(years) + len(instructors) + len(rooms)
+    print(f"[generate] Total files in zip: {total_files}")
 
-    return (output.read(), 200, {
-        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': 'attachment; filename="timetable.xlsx"',
+    return (zip_buffer.read(), 200, {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': 'attachment; filename="timetables.zip"',
         'X-Generation-Time': f'{generation_time:.2f}',
-        'X-Total-Assignments': str(len(df))
+        'X-Total-Assignments': str(len(df)),
+        'X-Total-Files': str(total_files)
     })
 
 
