@@ -22,90 +22,346 @@ app = Flask(__name__)
 
 def create_excel_timetable(df, title="Timetable"):
     """
-    Create an Excel file from a timetable DataFrame
-    Returns BytesIO object containing the Excel file
+    Create a grid-style Excel timetable matching the PDF structure exactly
     """
     output = BytesIO()
     workbook = xlsxwriter.Workbook(output, {'in_memory': True})
     worksheet = workbook.add_worksheet('Timetable')
     
     # Define formats
+    title_format = workbook.add_format({
+        'bold': True,
+        'font_size': 14,
+        'align': 'center',
+        'valign': 'vcenter',
+        'bg_color': '#4472C4',
+        'font_color': 'white',
+        'border': 1
+    })
+    
+    label_format = workbook.add_format({
+        'bold': True,
+        'font_size': 10,
+        'align': 'center',
+        'valign': 'vcenter',
+        'bg_color': '#D0D0D0',
+        'border': 1
+    })
+    
+    group_name_format = workbook.add_format({
+        'bold': True,
+        'font_size': 10,
+        'align': 'center',
+        'valign': 'vcenter',
+        'border': 1
+    })
+    
     header_format = workbook.add_format({
         'bold': True,
         'bg_color': '#D9D9D9',
         'border': 1,
         'align': 'center',
-        'valign': 'vcenter'
+        'valign': 'vcenter',
+        'font_size': 10
+    })
+    
+    time_format = workbook.add_format({
+        'bold': True,
+        'bg_color': '#E8E8E8',
+        'border': 1,
+        'align': 'center',
+        'valign': 'vcenter',
+        'font_size': 9
     })
     
     lecture_format = workbook.add_format({
-        'bg_color': '#FFD966',  # Yellow for lectures
+        'bg_color': '#FFD966',
         'border': 1,
-        'align': 'center',
-        'valign': 'vcenter',
-        'text_wrap': True
+        'align': 'left',
+        'valign': 'top',
+        'text_wrap': True,
+        'font_size': 8
     })
     
     lab_format = workbook.add_format({
-        'bg_color': '#9FC5E8',  # Blue for labs
+        'bg_color': '#9FC5E8',
         'border': 1,
-        'align': 'center',
-        'valign': 'vcenter',
-        'text_wrap': True
+        'align': 'left',
+        'valign': 'top',
+        'text_wrap': True,
+        'font_size': 8
     })
     
     tut_format = workbook.add_format({
-        'bg_color': '#B4A7D6',  # Purple for tutorials
+        'bg_color': '#B4A7D6',
         'border': 1,
-        'align': 'center',
-        'valign': 'vcenter',
-        'text_wrap': True
+        'align': 'left',
+        'valign': 'top',
+        'text_wrap': True,
+        'font_size': 8
     })
     
-    cell_format = workbook.add_format({
+    empty_format = workbook.add_format({
         'border': 1,
-        'align': 'center',
-        'valign': 'vcenter',
-        'text_wrap': True
+        'bg_color': '#FFFFFF'
     })
     
-    # Write headers
-    headers = ['CourseID', 'CourseName', 'SectionID', 'Session', 'Day', 'StartTime', 'EndTime', 'Room', 'Instructor']
-    for col, header in enumerate(headers):
-        worksheet.write(0, col, header, header_format)
+    # Days order
+    days_order = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday']
     
-    # Write data rows
-    for row_idx, row in enumerate(df.itertuples(index=False), start=1):
-        session = getattr(row, 'Session', '')
-        session_lower = str(session).lower()
+    # Create TimeSlot column
+    df['TimeSlot'] = df['StartTime'] + ' - ' + df['EndTime']
+    
+    # Extract year and department
+    def extract_info(section_id):
+        try:
+            parts = str(section_id).split('/')
+            year = int(parts[0])
+            dept = parts[1] if len(parts) > 1 else str(parts[1]) if len(parts) > 1 else ''
+            section_num = parts[2] if len(parts) > 2 else parts[1] if len(parts) > 1 else ''
+            return year, dept, section_num
+        except:
+            return 0, '', ''
+    
+    df['Year'] = df['SectionID'].apply(lambda x: extract_info(x)[0])
+    df['Dept'] = df['SectionID'].apply(lambda x: extract_info(x)[1])
+    df['SectionNum'] = df['SectionID'].apply(lambda x: extract_info(x)[2])
+    
+    # Time sorting
+    def time_to_minutes(time_str):
+        try:
+            # Remove any extra spaces
+            time_str = time_str.strip()
+            # Handle formats like "9:00", "9:0", "09:00", "1:15", etc.
+            if ':' in time_str:
+                parts = time_str.split(':')
+                hours = int(parts[0])
+                minutes = int(parts[1]) if len(parts) > 1 and parts[1] else 0
+                return hours * 60 + minutes
+            # If no colon, assume it's just hours
+            return int(time_str) * 60
+        except Exception as e:
+            print(f"Error parsing time '{time_str}': {e}")
+            return 0
+    
+    def parse_timeslot(timeslot):
+        try:
+            # Split by ' - ' and parse both start and end times
+            if ' - ' in timeslot:
+                parts = timeslot.split(' - ')
+                start = parts[0].strip()
+                end = parts[1].strip() if len(parts) > 1 else ""
+                start_mins = time_to_minutes(start)
+                end_mins = time_to_minutes(end)
+                # Sort by start time first, then by end time
+                return (start_mins, end_mins)
+            return (0, 0)
+        except Exception as e:
+            print(f"Error parsing timeslot '{timeslot}': {e}")
+            return (0, 0)
+    
+    # Function to sort section IDs numerically
+    def sort_sections_numerically(sections):
+        def section_sort_key(section_id):
+            try:
+                parts = str(section_id).split('/')
+                year = int(parts[0])
+                # Get the numeric part (last part for year 1-2, or third part for year 3-4)
+                if len(parts) == 2:
+                    num = int(parts[1])
+                elif len(parts) == 3:
+                    num = int(parts[2])
+                else:
+                    num = 0
+                return (year, num)
+            except:
+                return (0, 0)
+        return sorted(sections, key=section_sort_key)
+    
+    # Organize groups by year - matching PDF structure
+    groups_to_create = []
+    
+    # Year 1: CSIT (Group 1), (Group 2), (Group 3), (Group 4)
+    year1_sections = sort_sections_numerically([s for s in df[df['Year'] == 1]['SectionID'].unique()])
+    for i in range(0, len(year1_sections), 4):
+        group_sections = year1_sections[i:i+4]
+        if group_sections:
+            group_num = (i // 4) + 1
+            groups_to_create.append({
+                'year_title': '1st Year' if i == 0 else None,
+                'group_num': group_num,
+                'group_name': f'CSIT (Group {group_num})',
+                'sections': group_sections
+            })
+    
+    # Year 2: CSIT (Group 1), (Group 2), (Group 3), (Group 4)
+    year2_sections = sort_sections_numerically([s for s in df[df['Year'] == 2]['SectionID'].unique()])
+    for i in range(0, len(year2_sections), 3):
+        group_sections = year2_sections[i:i+3]
+        if group_sections:
+            group_num = (i // 3) + 1
+            groups_to_create.append({
+                'year_title': '2nd Year' if i == 0 else None,
+                'group_num': group_num,
+                'group_name': f'CSIT (Group {group_num})',
+                'sections': group_sections
+            })
+    
+    # Year 3 & 4: By department - CSIT (AID), CSIT (BIF), CSIT (CNC), CSIT (CSC)
+    for year, year_label in [(3, '3rd Year'), (4, '4th Year')]:
+        first_dept = True
+        for dept in ['AID', 'BIF', 'CNC', 'CSC']:
+            dept_sections = sort_sections_numerically([s for s in df[(df['Year'] == year) & (df['Dept'] == dept)]['SectionID'].unique()])
+            if dept_sections:
+                groups_to_create.append({
+                    'year_title': year_label if first_dept else None,
+                    'group_num': None,
+                    'group_name': f'CSIT ({dept})',
+                    'sections': dept_sections
+                })
+                first_dept = False
+    
+    # Create the timetable
+    current_row = 0
+    
+    for group_info in groups_to_create:
+        # Write Year title if this is the first group of a year
+        if group_info['year_title']:
+            worksheet.merge_range(current_row, 0, current_row, len(days_order), 
+                                group_info['year_title'], title_format)
+            worksheet.set_row(current_row, 25)
+            current_row += 1
+            
+            # Write "Faculty", "Group", "Section" row headers
+            worksheet.write(current_row, 0, 'Faculty', label_format)
+            worksheet.write(current_row, 1, 'Group', label_format)
+            worksheet.write(current_row, 2, 'Section', label_format)
+            for col in range(3, len(days_order) + 1):
+                worksheet.write(current_row, col, '', label_format)
+            current_row += 1
         
-        if 'lab' in session_lower:
-            session_format = lab_format
-        elif 'tut' in session_lower:
-            session_format = tut_format
-        else:
-            session_format = lecture_format
+        # Filter data for this group
+        group_df = df[df['SectionID'].isin(group_info['sections'])]
         
-        worksheet.write(row_idx, 0, getattr(row, 'CourseID', ''), cell_format)
-        worksheet.write(row_idx, 1, getattr(row, 'CourseName', ''), cell_format)
-        worksheet.write(row_idx, 2, getattr(row, 'SectionID', ''), cell_format)
-        worksheet.write(row_idx, 3, session, session_format)
-        worksheet.write(row_idx, 4, getattr(row, 'Day', ''), cell_format)
-        worksheet.write(row_idx, 5, getattr(row, 'StartTime', ''), cell_format)
-        worksheet.write(row_idx, 6, getattr(row, 'EndTime', ''), cell_format)
-        worksheet.write(row_idx, 7, getattr(row, 'Room', ''), cell_format)
-        worksheet.write(row_idx, 8, getattr(row, 'Instructor', ''), cell_format)
+        if group_df.empty:
+            continue
+        
+        # Write group identifier row
+        worksheet.write(current_row, 0, group_info['group_name'], group_name_format)
+        worksheet.write(current_row, 1, str(group_info['group_num']) if group_info['group_num'] else '', group_name_format)
+        sections_str = ', '.join([str(s).split('/')[-1] for s in group_info['sections']])
+        worksheet.write(current_row, 2, sections_str, group_name_format)
+        for col in range(3, len(days_order) + 1):
+            worksheet.write(current_row, col, '', group_name_format)
+        current_row += 1
+        
+        # Get unique timeslots and sort
+        timeslots = sorted(group_df['TimeSlot'].unique(), key=parse_timeslot)
+        
+        # Write day headers
+        worksheet.write(current_row, 0, '', header_format)
+        for col_idx, day in enumerate(days_order, start=1):
+            worksheet.write(current_row, col_idx, day, header_format)
+        worksheet.set_row(current_row, 20)
+        current_row += 1
+        
+        # Build grid data - organize by timeslot, day, and course/section
+        grid_data = {}
+        for _, row in group_df.iterrows():
+            timeslot = row['TimeSlot']
+            day = row['Day']
+            course_id = row['CourseID']
+            section_id = row['SectionID']
+            session_type = str(row['Session']).lower()
+            
+            # For lectures, use course_id only (same for all sections)
+            # For LAB/TUT, include section_id to make them separate
+            if 'lec' in session_type:
+                key = (timeslot, day, course_id, 'LEC')
+            else:
+                key = (timeslot, day, course_id, section_id)
+            
+            # Format like PDF: Course + Name, Instructor, Type, Room
+            cell_text = f"{row['CourseID']} {row['CourseName']}\n"
+            cell_text += f"{row['Instructor']}\n"
+            
+            # Add SectionID for LAB and TUT sessions only
+            if 'lab' in session_type or 'tut' in session_type:
+                cell_text += f"{row['Session']} ({row['SectionID']})\n"
+            else:
+                cell_text += f"{row['Session']}\n"
+            
+            cell_text += f"{row['Room']}"
+            
+            # For lectures, only store once (don't duplicate for each section)
+            if key not in grid_data or 'lec' not in session_type:
+                grid_data[key] = {
+                    'text': cell_text,
+                    'type': session_type,
+                    'timeslot': timeslot,
+                    'day': day
+                }
+        
+        # Group entries by timeslot and day, then create separate rows for each unique entry
+        timeslot_day_entries = {}
+        for key, data in grid_data.items():
+            timeslot = data['timeslot']
+            day = data['day']
+            td_key = (timeslot, day)
+            if td_key not in timeslot_day_entries:
+                timeslot_day_entries[td_key] = []
+            timeslot_day_entries[td_key].append(data)
+        
+        # Fill grid - create separate rows for each unique course at same timeslot
+        for timeslot in timeslots:
+            # Find max entries across all days for this timeslot
+            max_entries = 0
+            for day in days_order:
+                td_key = (timeslot, day)
+                if td_key in timeslot_day_entries:
+                    max_entries = max(max_entries, len(timeslot_day_entries[td_key]))
+            
+            # Create rows for this timeslot (one row per entry)
+            for entry_idx in range(max(1, max_entries)):
+                # Write timeslot only in first row
+                if entry_idx == 0:
+                    worksheet.write(current_row, 0, timeslot, time_format)
+                else:
+                    worksheet.write(current_row, 0, '', time_format)
+                
+                for col_idx, day in enumerate(days_order, start=1):
+                    td_key = (timeslot, day)
+                    
+                    if td_key in timeslot_day_entries and entry_idx < len(timeslot_day_entries[td_key]):
+                        entry = timeslot_day_entries[td_key][entry_idx]
+                        
+                        session_type = entry['type']
+                        if 'lab' in session_type:
+                            cell_format = lab_format
+                        elif 'tut' in session_type:
+                            cell_format = tut_format
+                        else:
+                            cell_format = lecture_format
+                        
+                        worksheet.write(current_row, col_idx, entry['text'], cell_format)
+                    else:
+                        worksheet.write(current_row, col_idx, '', empty_format)
+                
+                worksheet.set_row(current_row, 50)
+                current_row += 1
+        
+        # Blank row between groups
+        current_row += 1
     
     # Set column widths
-    worksheet.set_column(0, 0, 12)  # CourseID
-    worksheet.set_column(1, 1, 30)  # CourseName
-    worksheet.set_column(2, 2, 12)  # SectionID
-    worksheet.set_column(3, 3, 12)  # Session
-    worksheet.set_column(4, 4, 12)  # Day
-    worksheet.set_column(5, 5, 12)  # StartTime
-    worksheet.set_column(6, 6, 12)  # EndTime
-    worksheet.set_column(7, 7, 10)  # Room
-    worksheet.set_column(8, 8, 25)  # Instructor
+    worksheet.set_column(0, 0, 15)  # Time/Faculty column
+    worksheet.set_column(1, 1, 12)  # Group column
+    worksheet.set_column(2, 2, 12)  # Section column
+    worksheet.set_column(3, len(days_order), 28)  # Day columns (adjust start from column 3)
+    
+    # Adjust to proper column layout - time in col 0, days in cols 1-5
+    worksheet.set_column(0, 0, 15)  # Time column
+    worksheet.set_column(1, len(days_order), 28)  # Day columns
     
     workbook.close()
     output.seek(0)
