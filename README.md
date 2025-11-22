@@ -1,8 +1,17 @@
 # ATTG - Automatic Timetable Generator
 
-An intelligent automatic timetable generator that uses constraint satisfaction algorithms to create optimized class schedules for educational institutions. Generates comprehensive timetable packages with separate schedules for years, instructors, and rooms.
+A modern, intelligent timetable generator with a futuristic web interface. Uses constraint satisfaction algorithms to create optimized class schedules for educational institutions with beautiful gradient-based UI.
 
 ## 🌟 Features
+
+### Modern Web Interface
+- **Futuristic Design**: Beautiful animated gradient backgrounds with glassmorphic cards
+- **Smooth Animations**: Professional transitions and hover effects throughout
+- **Drag & Drop Upload**: Simply drag CSV files onto color-coded upload zones
+- **Real-Time Progress**: Visual step-by-step generation tracking with progress bar
+- **TypeScript Powered**: Type-safe frontend with modern ES2017+ features
+- **Tailwind CSS**: Utility-first styling with custom gradient themes
+- **Responsive Design**: Works seamlessly on desktop, tablet, and mobile
 
 ### Core Scheduling Engine
 - **Advanced CSP Algorithm**: Uses constraint satisfaction with forward checking and backtracking
@@ -25,61 +34,95 @@ An intelligent automatic timetable generator that uses constraint satisfaction a
 - **Instructor Timetables**: Individual schedules for each professor and assistant professor
 - **Room Timetables**: Usage schedules for each classroom, lab, and tutorial room
 - **Color-Coded Sessions**: Yellow for lectures, blue for labs, purple for tutorials
-
-### User Experience
-- **Web Interface**: Modern, user-friendly interface with drag-and-drop uploads
-- **Real-Time Feedback**: Progress indicators and performance metrics
-- **Detailed Statistics**: Generation time, assignment count, and file count
-- **Performance Tracking**: Displays timing information and comprehensive logs
+- **Grid Layout**: Time × Days structure matching academic PDF formats
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
+**Backend:**
 - Python 3.7+
 - Flask
 - pandas
 - xlsxwriter
 - openpyxl
 
+**Frontend:**
+- Node.js 14+ (for TypeScript compilation)
+- npm
+
 ### Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/Gawad-B/attg.git
+git clone https://github.com/Gawad-B/Automatic-Timetable-Generator.git
 cd attg
 ```
 
-2. Install dependencies:
+2. Install Python dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-Or manually install:
+3. Install Node dependencies and compile TypeScript:
 ```bash
-pip install Flask pandas xlsxwriter openpyxl
+npm install
+npm run build
 ```
 
-3. Run the application:
+4. Run the application:
 ```bash
 python server.py
 ```
+   Or use the startup script:
+```bash
+./start.sh
+```
 
-4. Open your browser and navigate to `http://localhost:5000`
+5. Open your browser and navigate to `http://localhost:5000`
 
 ## 📁 Project Structure
 
 ```
 attg/
-├── server.py              # Flask web server
+├── server.py              # Flask backend with API endpoints
 ├── csp.py                 # Constraint satisfaction algorithm
 ├── templates/
-│   └── index.html         # Web interface
+│   └── index.html         # Modern web interface
 ├── static/
-│   ├── uploads/           # Uploaded CSV files
-│   └── assets/           # CSS/JS assets
+│   ├── js/
+│   │   ├── app.ts        # TypeScript source
+│   │   └── app.js        # Compiled JavaScript
+│   ├── images/
+│   │   └── table.ico     # Favicon
+│   └── uploads/          # CSV file storage
+│       ├── courses/
+│       ├── instructors/
+│       ├── rooms/
+│       ├── timeslots/
+│       └── sections/
+├── package.json           # Node dependencies
+├── tsconfig.json          # TypeScript configuration
+├── requirements.txt       # Python dependencies
+├── start.sh              # Startup script
 └── README.md
 ```
+
+## 🎨 UI Features
+
+### Color-Coded Upload Zones
+- 🟣 **Courses**: Pink to Purple gradient
+- 🔵 **Instructors**: Blue to Cyan gradient
+- 🟢 **Rooms**: Green to Teal gradient
+- 🟡 **Timeslots**: Yellow to Orange gradient
+- 🟣 **Sections**: Indigo to Purple gradient
+
+### Interactive Elements
+- **Drag & Drop**: Drop files directly onto upload cards
+- **Status Indicators**: Real-time visual feedback (pending/success/error)
+- **Progress Bar**: Step-by-step generation tracking
+- **Success Screen**: Statistics with download button
+- **Smooth Animations**: Slide-up, pulse, and hover effects
 
 ## 📊 Data Format
 
@@ -422,13 +465,57 @@ This information helps monitor system performance and understand the complexity 
    - Check timeslots.csv has entries with Duration=45 and Duration=90
    - Each TUT session is scheduled individually (1 section per timeslot)
 
-4. **Slow generation time**
+7. **Upload not working**
+   - Ensure all 5 CSV files are uploaded before clicking "Generate Timetable"
+   - Check that files are valid CSV format
+   - Try drag & drop if button upload doesn't work
+   - Check browser console for JavaScript errors
+
+8. **Slow generation time**
    - Large datasets (90+ courses) may take 15-30 seconds
+   - Watch the progress bar for step-by-step feedback
    - Performance metrics are displayed after completion
    - Check server console for detailed timing logs
 
-5. **Uneven day distribution**
-   - The algorithm uses randomization for balanced distribution
+## 💻 Development
+
+### TypeScript Development
+```bash
+# Watch mode for auto-compilation during development
+npm run watch
+```
+
+### Running Tests
+```bash
+# Test with sample data in static/uploads/
+python server.py
+# Then open http://localhost:5000 and upload files
+```
+
+## 🎯 API Endpoints
+
+- `GET /` - Main web interface
+- `POST /upload` - Bulk upload all CSV files
+- `POST /generate` - Generate timetables (returns JSON with stats)
+- `GET /download` - Download generated ZIP file
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+[Add your license here]
+
+## 👨‍💻 Author
+
+**Gawad-B**
+- GitHub: [@Gawad-B](https://github.com/Gawad-B)
+- Repository: [Automatic-Timetable-Generator](https://github.com/Gawad-B/Automatic-Timetable-Generator)
+
+---
+
+**Built with ❤️ using Python, TypeScript, Flask, and Tailwind CSS**
    - Run generation multiple times for different distributions
 
 ### Debug Information
