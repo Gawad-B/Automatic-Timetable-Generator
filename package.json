@@ -1,0 +1,12 @@
+{
+  "name": "attg-frontend",
+  "version": "1.0.0",
+  "description": "Automatic Timetable Generator Frontend",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

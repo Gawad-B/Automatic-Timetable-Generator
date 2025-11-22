@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "module": "ES6",
+    "lib": ["ES2017", "DOM", "DOM.Iterable"],
+    "outDir": "./static/js",
+    "rootDir": "./static/js",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true
+  },
+  "include": [
+    "static/js/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "static/js/**/*.js"
+  ]
+}

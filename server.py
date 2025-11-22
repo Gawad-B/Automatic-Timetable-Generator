@@ -16,9 +16,23 @@ os.makedirs(UPLOAD_BASE, exist_ok=True)
 
 ALLOWED_TARGETS = {'courses', 'instructors', 'rooms', 'timeslots', 'sections'}
 
+# Store upload status
+upload_status = {
+    'courses': False,
+    'instructors': False,
+    'rooms': False,
+    'timeslots': False,
+    'sections': False
+}
 
+# Store generated zip temporarily
+last_generated_zip = None
 
 app = Flask(__name__)
+
+@app.route('/')
+def index():
+    return render_template('index.html')
 
 def create_excel_timetable(df, title="Timetable"):
     """
@@ -367,15 +381,15 @@ def create_excel_timetable(df, title="Timetable"):
     output.seek(0)
     return output
 
-@app.route('/')
-def home():
-    return render_template('index.html')
-
-
 @app.route('/generate', methods=['POST'])
 def generate():
+    global last_generated_zip
+    
     # Track generation time
     start_time = time.time()
+    
+    # Reset the zip file
+    last_generated_zip = None
     
     # Generate timetable using uploaded CSVs in static/uploads
     try:
@@ -478,15 +492,61 @@ def generate():
     
     total_files = 1 + len(years) + len(instructors) + len(rooms)
     print(f"[generate] Total files in zip: {total_files}")
+    
+    # Store the zip file globally for download
+    last_generated_zip = zip_buffer.read()
 
-    return (zip_buffer.read(), 200, {
-        'Content-Type': 'application/zip',
-        'Content-Disposition': 'attachment; filename="timetables.zip"',
-        'X-Generation-Time': f'{generation_time:.2f}',
-        'X-Total-Assignments': str(len(df)),
-        'X-Total-Files': str(total_files)
-    })
+    # Return JSON response for API
+    return jsonify(
+        success=True,
+        total_assignments=len(df),
+        total_files=total_files,
+        generation_time=generation_time,
+        message='Timetables generated successfully'
+    )
 
+@app.route('/download', methods=['GET'])
+def download():
+    """Download the last generated timetable zip"""
+    global last_generated_zip
+    
+    if last_generated_zip is None:
+        return jsonify(success=False, message='No timetable generated yet'), 404
+    
+    from flask import Response
+    return Response(
+        last_generated_zip,
+        mimetype='application/zip',
+        headers={'Content-Disposition': 'attachment; filename="timetables.zip"'}
+    )
+
+
+@app.route('/upload', methods=['POST'])
+def upload_all():
+    """Handle bulk file upload from new UI"""
+    try:
+        uploaded_count = 0
+        for target in ALLOWED_TARGETS:
+            if target in request.files:
+                file = request.files[target]
+                if file.filename != '':
+                    filename = f"{target}.csv"
+                    target_dir = os.path.join(UPLOAD_BASE, target)
+                    os.makedirs(target_dir, exist_ok=True)
+                    filepath = os.path.join(target_dir, filename)
+                    file.save(filepath)
+                    upload_status[target] = True
+                    uploaded_count += 1
+        
+        all_uploaded = all(upload_status.values())
+        return jsonify(
+            success=True,
+            uploaded=uploaded_count,
+            all_ready=all_uploaded,
+            message=f'Uploaded {uploaded_count} files successfully'
+        )
+    except Exception as e:
+        return jsonify(success=False, message=str(e)), 500
 
 @app.route('/upload/<target>', methods=['POST'])
 def upload(target):

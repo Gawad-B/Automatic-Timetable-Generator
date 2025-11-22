@@ -1,77 +1,326 @@
-<!DOCTYPE HTML>
-<!--
-	Eventually by HTML5 UP
-	html5up.net | @ajlkn
-	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
--->
-<html>
-	<head>
-		<title>ATTG</title>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-		<link rel="stylesheet" href="/static/assets/css/main.css" />
-		<link rel="icon" type="image/x-icon" href="/static/images/table.ico">
-	</head>
-	<body class="is-preload">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATTG - Automatic Timetable Generator</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/table.ico') }}">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(-45deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #4facfe 75%, #00f2fe 100%);
+            background-size: 400% 400%;
+            animation: gradient 15s ease infinite;
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .upload-zone {
+            transition: all 0.3s ease;
+        }
+        
+        .upload-zone:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+        }
+        
+        .upload-zone.dragover {
+            background: rgba(102, 126, 234, 0.2);
+            border-color: #667eea;
+            transform: scale(1.02);
+        }
+        
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(102, 126, 234, 0.5); }
+            50% { box-shadow: 0 0 40px rgba(102, 126, 234, 0.8); }
+        }
+        
+        .pulse-glow {
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+        
+        @keyframes slide-up {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .slide-up {
+            animation: slide-up 0.6s ease-out forwards;
+        }
+        
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+        
+        .btn-gradient {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-gradient:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-gradient:active {
+            transform: translateY(0);
+        }
+        
+        .file-item {
+            transition: all 0.3s ease;
+        }
+        
+        .file-item:hover {
+            background: rgba(102, 126, 234, 0.1);
+            transform: translateX(5px);
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        .status-success { background: #10b981; }
+        .status-pending { background: #f59e0b; }
+        .status-error { background: #ef4444; }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen">
+    <!-- Header -->
+    <header class="glass-card py-6 mb-8 slide-up">
+        <div class="container mx-auto px-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center pulse-glow">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h1 class="text-3xl font-bold text-white">ATTG</h1>
+                        <p class="text-sm text-purple-200">Automatic Timetable Generator</p>
+                    </div>
+                </div>
+                <div class="text-white text-sm">
+                    <span class="opacity-75">AI-Powered Scheduling</span>
+                </div>
+            </div>
+        </div>
+    </header>
 
-		<!-- Header -->
-			<header id="header">
-				<h1>ATTG</h1>
-				<p>An automatic timetable generator that works with multiple algorithms.</p>
-			</header>
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 pb-12">
+        <div class="max-w-6xl mx-auto">
+            <!-- Welcome Section -->
+            <div class="text-center mb-12 slide-up" style="animation-delay: 0.1s">
+                <h2 class="text-5xl font-bold text-white mb-4">Generate Perfect Timetables</h2>
+                <p class="text-xl text-purple-200 max-w-2xl mx-auto">
+                    Upload your data files and let our intelligent system create optimized timetables with constraint satisfaction
+                </p>
+            </div>
 
-		<!-- Signup + Uploads Container -->
-		<section id="signup-uploads">
-			<!-- Upload Buttons / Forms -->
-			<section id="uploads">
-			<!-- Each form uses the same styling as the signup form and will be handled via JS -->
-			<form id="courses-form" class="upload-form" method="post" action="/upload/courses" enctype="multipart/form-data">
-				<!-- visually hide the file input; the button will trigger it -->
-				<input type="file" name="file" id="courses-file" style="display:none" />
-				<input type="button" id="courses-button" value="Courses" />
-			</form>
+            <!-- Upload Cards Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                <!-- Courses Upload -->
+                <div class="glass-card rounded-2xl p-6 upload-zone slide-up" style="animation-delay: 0.2s" data-target="courses">
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-gradient-to-br from-pink-500 to-purple-500 rounded-full mx-auto mb-4 flex items-center justify-center">
+                            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-white font-semibold text-lg mb-2">Courses</h3>
+                        <p class="text-purple-200 text-sm mb-4">Upload courses.csv</p>
+                        <input type="file" id="courses-file" class="hidden" accept=".csv">
+                        <button onclick="document.getElementById('courses-file').click()" class="w-full py-2 px-4 bg-white/20 hover:bg-white/30 text-white rounded-lg transition">
+                            Choose File
+                        </button>
+                        <div class="mt-3 text-sm">
+                            <span class="status-dot status-pending" id="courses-status"></span>
+                            <span class="text-white opacity-75" id="courses-filename">No file selected</span>
+                        </div>
+                    </div>
+                </div>
 
-			<form id="instructors-form" class="upload-form" method="post" action="/upload/instructors" enctype="multipart/form-data">
-				<input type="file" name="file" id="instructors-file" style="display:none" />
-				<input type="button" id="instructors-button" value="Instructors" />
-			</form>
+                <!-- Instructors Upload -->
+                <div class="glass-card rounded-2xl p-6 upload-zone slide-up" style="animation-delay: 0.3s" data-target="instructors">
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full mx-auto mb-4 flex items-center justify-center">
+                            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-white font-semibold text-lg mb-2">Instructors</h3>
+                        <p class="text-purple-200 text-sm mb-4">Upload instructors.csv</p>
+                        <input type="file" id="instructors-file" class="hidden" accept=".csv">
+                        <button onclick="document.getElementById('instructors-file').click()" class="w-full py-2 px-4 bg-white/20 hover:bg-white/30 text-white rounded-lg transition">
+                            Choose File
+                        </button>
+                        <div class="mt-3 text-sm">
+                            <span class="status-dot status-pending" id="instructors-status"></span>
+                            <span class="text-white opacity-75" id="instructors-filename">No file selected</span>
+                        </div>
+                    </div>
+                </div>
 
-			<form id="rooms-form" class="upload-form" method="post" action="/upload/rooms" enctype="multipart/form-data">
-				<input type="file" name="file" id="rooms-file" style="display:none" />
-				<input type="button" id="rooms-button" value="Rooms" />
-			</form>
+                <!-- Rooms Upload -->
+                <div class="glass-card rounded-2xl p-6 upload-zone slide-up" style="animation-delay: 0.4s" data-target="rooms">
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-gradient-to-br from-green-500 to-teal-500 rounded-full mx-auto mb-4 flex items-center justify-center">
+                            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-white font-semibold text-lg mb-2">Rooms</h3>
+                        <p class="text-purple-200 text-sm mb-4">Upload rooms.csv</p>
+                        <input type="file" id="rooms-file" class="hidden" accept=".csv">
+                        <button onclick="document.getElementById('rooms-file').click()" class="w-full py-2 px-4 bg-white/20 hover:bg-white/30 text-white rounded-lg transition">
+                            Choose File
+                        </button>
+                        <div class="mt-3 text-sm">
+                            <span class="status-dot status-pending" id="rooms-status"></span>
+                            <span class="text-white opacity-75" id="rooms-filename">No file selected</span>
+                        </div>
+                    </div>
+                </div>
 
-			<form id="timeslots-form" class="upload-form" method="post" action="/upload/timeslots" enctype="multipart/form-data">
-				<input type="file" name="file" id="timeslots-file" style="display:none" />
-				<input type="button" id="timeslots-button" value="Timeslots" />
-			</form>
+                <!-- Timeslots Upload -->
+                <div class="glass-card rounded-2xl p-6 upload-zone slide-up" style="animation-delay: 0.5s" data-target="timeslots">
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-full mx-auto mb-4 flex items-center justify-center">
+                            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-white font-semibold text-lg mb-2">Timeslots</h3>
+                        <p class="text-purple-200 text-sm mb-4">Upload timeslots.csv</p>
+                        <input type="file" id="timeslots-file" class="hidden" accept=".csv">
+                        <button onclick="document.getElementById('timeslots-file').click()" class="w-full py-2 px-4 bg-white/20 hover:bg-white/30 text-white rounded-lg transition">
+                            Choose File
+                        </button>
+                        <div class="mt-3 text-sm">
+                            <span class="status-dot status-pending" id="timeslots-status"></span>
+                            <span class="text-white opacity-75" id="timeslots-filename">No file selected</span>
+                        </div>
+                    </div>
+                </div>
 
-			<form id="sections-form" class="upload-form" method="post" action="/upload/sections" enctype="multipart/form-data">
-				<input type="file" name="file" id="sections-file" style="display:none" />
-				<input type="button" id="sections-button" value="Sections" />
-			</form>
-		</section>
+                <!-- Sections Upload -->
+                <div class="glass-card rounded-2xl p-6 upload-zone slide-up" style="animation-delay: 0.6s" data-target="sections">
+                    <div class="text-center">
+                        <div class="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-full mx-auto mb-4 flex items-center justify-center">
+                            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-white font-semibold text-lg mb-2">Sections</h3>
+                        <p class="text-purple-200 text-sm mb-4">Upload sections.csv</p>
+                        <input type="file" id="sections-file" class="hidden" accept=".csv">
+                        <button onclick="document.getElementById('sections-file').click()" class="w-full py-2 px-4 bg-white/20 hover:bg-white/30 text-white rounded-lg transition">
+                            Choose File
+                        </button>
+                        <div class="mt-3 text-sm">
+                            <span class="status-dot status-pending" id="sections-status"></span>
+                            <span class="text-white opacity-75" id="sections-filename">No file selected</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-			<!-- Generate button on the right -->
-			<div id="generate-area">
-				<input type="button" id="generate-button" value="Generate" />
-			</div>
+            <!-- Generate Button -->
+            <div class="text-center slide-up" style="animation-delay: 0.7s">
+                <button id="generate-btn" class="btn-gradient text-white font-semibold py-4 px-12 rounded-full text-lg shadow-2xl disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                    <span id="btn-text">Generate Timetable</span>
+                    <svg id="btn-spinner" class="hidden inline-block w-5 h-5 ml-2 spinner" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </button>
+                <p class="text-purple-200 mt-4 text-sm" id="upload-status">Upload all files to generate timetable</p>
+            </div>
 
-		</section>
+            <!-- Progress Section (Hidden by default) -->
+            <div id="progress-section" class="glass-card rounded-2xl p-8 mt-8 hidden slide-up">
+                <h3 class="text-white font-semibold text-xl mb-4">Generating Timetable...</h3>
+                <div class="bg-white/20 rounded-full h-4 overflow-hidden">
+                    <div id="progress-bar" class="progress-bar bg-gradient-to-r from-purple-500 to-pink-500 h-full" style="width: 0%"></div>
+                </div>
+                <p class="text-purple-200 text-sm mt-3" id="progress-text">Initializing...</p>
+            </div>
 
-		<!-- Footer -->
-			<footer id="footer">
-				<ul class="icons">
-					<li><a href="https://github.com/Gawad-B" class="icon brands fa-github"><span class="label">GitHub</span></a></li>
-					<li><a href="https://mail.google.com/mail/u/0/?fs=1&tf=cm&source=mailto&to=abdelrahman.gawad.28@gmail.com" class="icon fa-envelope"><span class="label">Email</span></a></li>
-				</ul>
-				<ul class="copyright">
-					<li>&copy; Gawad.</li><li>Credits: <a href="http://gawad163.pythonanywhere.com" target="_blank">Abdelrahman Gawad</a></li>
-				</ul>
-			</footer>
+            <!-- Success Section (Hidden by default) -->
+            <div id="success-section" class="glass-card rounded-2xl p-8 mt-8 hidden slide-up">
+                <div class="text-center">
+                    <div class="w-20 h-20 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full mx-auto mb-4 flex items-center justify-center pulse-glow">
+                        <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                        </svg>
+                    </div>
+                    <h3 class="text-white font-bold text-2xl mb-2">Timetable Generated!</h3>
+                    <p class="text-purple-200 mb-6">Your timetable has been successfully created</p>
+                    <div class="space-y-2 text-left max-w-md mx-auto">
+                        <div class="flex justify-between text-white text-sm">
+                            <span class="opacity-75">Total Assignments:</span>
+                            <span class="font-semibold" id="total-assignments">-</span>
+                        </div>
+                        <div class="flex justify-between text-white text-sm">
+                            <span class="opacity-75">Total Files:</span>
+                            <span class="font-semibold" id="total-files">-</span>
+                        </div>
+                        <div class="flex justify-between text-white text-sm">
+                            <span class="opacity-75">Generation Time:</span>
+                            <span class="font-semibold" id="generation-time">-</span>
+                        </div>
+                    </div>
+                    <button id="download-btn" class="btn-gradient text-white font-semibold py-3 px-8 rounded-full mt-6">
+                        Download Timetables
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
 
-		<!-- Scripts -->
-			<script src="/static/assets/js/main.js"></script>
+    <!-- Footer -->
+    <footer class="glass-card py-6 mt-12">
+        <div class="container mx-auto px-4 text-center">
+            <p class="text-purple-200 text-sm">
+                © 2025 ATTG - Powered by Constraint Satisfaction & AI
+            </p>
+        </div>
+    </footer>
 
-	</body>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
 </html>
