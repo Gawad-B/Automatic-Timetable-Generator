@@ -1,6 +1,7 @@
 import os
 import time
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, Response, jsonify, render_template, request
+from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 from io import BytesIO
 import pandas as pd
@@ -14,21 +15,99 @@ UPLOAD_BASE = os.path.join(BASE_DIR, 'static', 'uploads')
 
 os.makedirs(UPLOAD_BASE, exist_ok=True)
 
-ALLOWED_TARGETS = {'courses', 'instructors', 'rooms', 'timeslots', 'sections'}
-
-# Store upload status
-upload_status = {
-    'courses': False,
-    'instructors': False,
-    'rooms': False,
-    'timeslots': False,
-    'sections': False
+ALLOWED_TARGETS = ('courses', 'instructors', 'rooms', 'timeslots', 'sections')
+ALLOWED_EXTENSIONS = {'.csv'}
+REQUIRED_COLUMNS = {
+    'courses': {'CourseID', 'Type'},
+    'instructors': set(),
+    'rooms': {'RoomID', 'Type'},
+    'timeslots': {'Day', 'StartTime', 'EndTime'},
+    'sections': {'SectionID'},
 }
 
 # Store generated zip temporarily
 last_generated_zip = None
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_UPLOAD_MB', '10')) * 1024 * 1024
+FRONTEND_ORIGIN = os.getenv('FRONTEND_ORIGIN', '').strip()
+
+
+def _allowed_file_extension(filename):
+    _, ext = os.path.splitext(filename)
+    return ext.lower() in ALLOWED_EXTENSIONS
+
+
+def _validate_required_columns(target, filepath):
+    required = REQUIRED_COLUMNS.get(target, set())
+    if not required:
+        return None
+
+    try:
+        columns = set(pd.read_csv(filepath, nrows=0).columns)
+    except Exception:
+        return f'Invalid CSV format for {target}'
+
+    missing = required - columns
+    if missing:
+        missing_cols = ', '.join(sorted(missing))
+        return f'Missing required columns for {target}: {missing_cols}'
+    return None
+
+
+def _save_uploaded_csv(file_storage, target, forced_filename=None):
+    original_name = secure_filename(file_storage.filename or '')
+    if not original_name:
+        raise ValueError('No selected file')
+    if not _allowed_file_extension(original_name):
+        raise ValueError('Only .csv files are allowed')
+
+    filename = secure_filename(forced_filename) if forced_filename else original_name
+    if not filename.lower().endswith('.csv'):
+        raise ValueError('Saved filename must end with .csv')
+
+    target_dir = os.path.join(UPLOAD_BASE, target)
+    os.makedirs(target_dir, exist_ok=True)
+    save_path = os.path.join(target_dir, filename)
+    file_storage.save(save_path)
+
+    validation_error = _validate_required_columns(target, save_path)
+    if validation_error:
+        os.remove(save_path)
+        raise ValueError(validation_error)
+
+    return filename, save_path
+
+
+def _all_required_uploads_present():
+    return all(
+        os.path.exists(os.path.join(UPLOAD_BASE, target, f'{target}.csv'))
+        for target in ALLOWED_TARGETS
+    )
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_file_too_large(_error):
+    max_mb = app.config['MAX_CONTENT_LENGTH'] // (1024 * 1024)
+    return jsonify(success=False, message=f'Upload too large. Max size is {max_mb} MB.'), 413
+
+
+@app.after_request
+def add_security_headers(response):
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+    response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    if FRONTEND_ORIGIN and request.path in {'/upload', '/generate', '/download'}:
+        response.headers['Access-Control-Allow-Origin'] = FRONTEND_ORIGIN
+        response.headers['Access-Control-Allow-Methods'] = 'GET,POST,OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response.headers['Vary'] = 'Origin'
+    return response
+
+
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify(status='ok'), 200
 
 @app.route('/')
 def index():
@@ -513,7 +592,6 @@ def download():
     if last_generated_zip is None:
         return jsonify(success=False, message='No timetable generated yet'), 404
     
-    from flask import Response
     return Response(
         last_generated_zip,
         mimetype='application/zip',
@@ -530,21 +608,18 @@ def upload_all():
             if target in request.files:
                 file = request.files[target]
                 if file.filename != '':
-                    filename = f"{target}.csv"
-                    target_dir = os.path.join(UPLOAD_BASE, target)
-                    os.makedirs(target_dir, exist_ok=True)
-                    filepath = os.path.join(target_dir, filename)
-                    file.save(filepath)
-                    upload_status[target] = True
+                    _save_uploaded_csv(file, target, forced_filename=f"{target}.csv")
                     uploaded_count += 1
         
-        all_uploaded = all(upload_status.values())
+        all_uploaded = _all_required_uploads_present()
         return jsonify(
             success=True,
             uploaded=uploaded_count,
             all_ready=all_uploaded,
             message=f'Uploaded {uploaded_count} files successfully'
         )
+    except ValueError as e:
+        return jsonify(success=False, message=str(e)), 400
     except Exception as e:
         return jsonify(success=False, message=str(e)), 500
 
@@ -568,24 +643,25 @@ def upload(target):
     use_target_name = request.form.get('use_target_name')
 
     if save_as:
-        # sanitize client-supplied name
         filename = secure_filename(save_as)
+        if not filename.lower().endswith('.csv'):
+            return jsonify(success=False, message='save_as filename must end with .csv'), 400
     elif use_target_name and use_target_name.lower() in ('1', 'true', 'yes'):
-        orig_ext = os.path.splitext(filename)[1]
-        filename = secure_filename(f"{target}{orig_ext}")
-    # Ensure target directory exists
-    target_dir = os.path.join(UPLOAD_BASE, target)
-    os.makedirs(target_dir, exist_ok=True)
+        filename = f"{target}.csv"
 
-    save_path = os.path.join(target_dir, filename)
     try:
-        # Overwrite existing file if present (user requested behavior)
-        file.save(save_path)
+        filename, save_path = _save_uploaded_csv(file, target, forced_filename=filename)
         print(f"[upload] saved file for target={target} filename={filename} path={save_path}")
+    except ValueError as e:
+        return jsonify(success=False, message=str(e)), 400
     except Exception as e:
         return jsonify(success=False, message=str(e)), 500
 
     return jsonify(success=True, message='File uploaded', filename=filename), 200
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(
+        host='0.0.0.0',
+        port=int(os.getenv('PORT', '5000')),
+        debug=os.getenv('FLASK_DEBUG', '0') == '1'
+    )

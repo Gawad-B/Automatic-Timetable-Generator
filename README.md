@@ -81,6 +81,41 @@ python server.py
 
 5. Open your browser and navigate to `http://localhost:5000`
 
+## 🚢 Deployment
+
+### Render (Backend)
+1. Create a **Web Service** from this repo.
+2. Use `render.yaml` (Blueprint) or set manually:
+   - Build Command: `pip install -r requirements.txt && npm ci && npm run build`
+   - Start Command: `gunicorn -c gunicorn.conf.py wsgi:app`
+3. Add environment variables from `.env.render.example`.
+4. Verify health check at `/health`.
+
+### Vercel (Frontend)
+1. Import the same repo in Vercel.
+2. Vercel reads `vercel.json` and serves `templates/index.html` as `/`.
+3. Add env vars from `.env.vercel.example`:
+   - `FRONTEND_API_BASE_URL=https://<your-render-service>.onrender.com`
+4. Redeploy after setting env vars.
+
+### Local production run
+```bash
+pip install -r requirements.txt
+npm ci
+npm run build
+gunicorn -c gunicorn.conf.py wsgi:app
+```
+
+### Docker deployment
+```bash
+docker build -t attg .
+docker run --rm -p 5000:5000 -e PORT=5000 attg
+```
+
+### Environment variables
+- Backend (Render): `PORT`, `FLASK_DEBUG`, `MAX_UPLOAD_MB`, `FRONTEND_ORIGIN`
+- Frontend (Vercel): `FRONTEND_API_BASE_URL`
+
 ## 📁 Project Structure
 
 ```

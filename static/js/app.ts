@@ -20,6 +20,7 @@ class TimetableGenerator {
     private uploadedFiles: FileUploadStatus;
     private isGenerating: boolean;
     private startTime: number;
+    private apiBaseUrl: string;
 
     constructor() {
         this.uploadedFiles = {
@@ -31,8 +32,20 @@ class TimetableGenerator {
         };
         this.isGenerating = false;
         this.startTime = 0;
+        this.apiBaseUrl = this.getApiBaseUrl();
         this.initializeEventListeners();
         this.setupDragAndDrop();
+    }
+
+    private getApiBaseUrl(): string {
+        const raw = (((window as any).__ATTG_API_BASE__ as string) || '').trim();
+        if (!raw) return '';
+        return raw.endsWith('/') ? raw.slice(0, -1) : raw;
+    }
+
+    private buildApiUrl(path: string): string {
+        const normalized = path.startsWith('/') ? path : `/${path}`;
+        return `${this.apiBaseUrl}${normalized}`;
     }
 
     private initializeEventListeners(): void {
@@ -176,22 +189,24 @@ class TimetableGenerator {
             });
 
             // Upload files
-            const response = await fetch('/upload', {
+            const response = await fetch(this.buildApiUrl('/upload'), {
                 method: 'POST',
                 body: formData
             });
 
             if (!response.ok) {
-                throw new Error('Upload failed');
+                const details = await response.json().catch(() => null);
+                throw new Error(details?.message || 'Upload failed');
             }
 
             // Generate timetable
-            const generateResponse = await fetch('/generate', {
+            const generateResponse = await fetch(this.buildApiUrl('/generate'), {
                 method: 'POST'
             });
 
             if (!generateResponse.ok) {
-                throw new Error('Generation failed');
+                const details = await generateResponse.json().catch(() => null);
+                throw new Error(details?.message || 'Generation failed');
             }
 
             const result: UploadResponse = await generateResponse.json();
@@ -204,7 +219,8 @@ class TimetableGenerator {
 
         } catch (error) {
             console.error('Error:', error);
-            this.showNotification('Failed to generate timetable. Please try again.', 'error');
+            const errorMessage = error instanceof Error ? error.message : 'Failed to generate timetable. Please try again.';
+            this.showNotification(errorMessage, 'error');
             this.resetUI();
         }
     }
@@ -263,7 +279,7 @@ class TimetableGenerator {
     }
 
     private downloadTimetable(): void {
-        window.location.href = '/download';
+        window.location.href = this.buildApiUrl('/download');
     }
 
     private resetUI(): void {

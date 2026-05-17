@@ -3,8 +3,10 @@
   "version": "1.0.0",
   "description": "Automatic Timetable Generator Frontend",
   "scripts": {
+    "prebuild": "node scripts/generate-frontend-config.js",
     "build": "tsc",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "build:vercel": "npm run build"
   },
   "devDependencies": {
     "typescript": "^5.3.3"
