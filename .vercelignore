@@ -1,0 +1,10 @@
+*.py
+requirements.txt
+Procfile
+gunicorn.conf.py
+wsgi.py
+Dockerfile
+render.yaml
+start.sh
+PROJECT_REPORT.pdf
+__pycache__/

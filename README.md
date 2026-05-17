@@ -94,9 +94,10 @@ python server.py
 ### Vercel (Frontend)
 1. Import the same repo in Vercel.
 2. Vercel reads `vercel.json` and serves `templates/index.html` as `/`.
-3. Add env vars from `.env.vercel.example`:
+3. Keep `.vercelignore` committed so Vercel only deploys frontend assets (and does not package Python backend files).
+4. Add env vars from `.env.vercel.example`:
    - `FRONTEND_API_BASE_URL=https://<your-render-service>.onrender.com`
-4. Redeploy after setting env vars.
+5. Redeploy after setting env vars.
 
 ### Local production run
 ```bash

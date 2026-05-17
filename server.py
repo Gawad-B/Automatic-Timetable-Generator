@@ -1,5 +1,6 @@
 import os
 import time
+import errno
 from flask import Flask, Response, jsonify, render_template, request
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
@@ -11,9 +12,23 @@ import traceback
 import zipfile
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-UPLOAD_BASE = os.path.join(BASE_DIR, 'static', 'uploads')
+DEFAULT_UPLOAD_BASE = os.path.join(BASE_DIR, 'static', 'uploads')
 
-os.makedirs(UPLOAD_BASE, exist_ok=True)
+
+def _init_upload_base():
+    configured = os.getenv('UPLOAD_BASE', DEFAULT_UPLOAD_BASE)
+    try:
+        os.makedirs(configured, exist_ok=True)
+        return configured
+    except OSError as e:
+        if e.errno != errno.EROFS:
+            raise
+        fallback = '/tmp/attg/uploads'
+        os.makedirs(fallback, exist_ok=True)
+        return fallback
+
+
+UPLOAD_BASE = _init_upload_base()
 
 ALLOWED_TARGETS = ('courses', 'instructors', 'rooms', 'timeslots', 'sections')
 ALLOWED_EXTENSIONS = {'.csv'}
