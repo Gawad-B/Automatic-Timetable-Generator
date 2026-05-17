@@ -1,9 +1,9 @@
 {
   "version": 2,
   "buildCommand": "npm ci && npm run build:vercel",
-  "outputDirectory": ".",
-  "rewrites": [
-    { "source": "/", "destination": "/templates/index.html" }
+  "routes": [
+    { "src": "/static/(.*)", "dest": "/static/$1" },
+    { "src": "/(.*)", "dest": "/templates/index.html" }
   ],
   "headers": [
     {
