@@ -117,6 +117,11 @@ docker run --rm -p 5000:5000 -e PORT=5000 attg
 - Backend (Render): `PORT`, `FLASK_DEBUG`, `MAX_UPLOAD_MB`, `FRONTEND_ORIGIN`
 - Frontend (Vercel): `FRONTEND_API_BASE_URL`
 
+For low-memory Render plans, keep Gunicorn small:
+- `WEB_CONCURRENCY=1`
+- `GUNICORN_THREADS=1`
+- `GUNICORN_TIMEOUT=300`
+
 ## 📁 Project Structure
 
 ```
